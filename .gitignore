@@ -1,0 +1,22 @@
+# Python
+pycache/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+ENV/
+.env
+tts_google_api.py
+
+# Secrets & Configs
+*.secret
+tv_token.json
+
+# IDEs
+.vscode/
+.idea/
+
+# Deployment
+dist/
+build/
+

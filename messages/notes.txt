@@ -1,0 +1,6 @@
+Rhasspy/HA are faster to install, but they are "heavy." 
+They include entire web servers and databases you don't need.
+
+Your Python Script will be "lighter" on RAM, faster to boot, and 100% customizable.
+Since you already have the Shelly/Loxone webhooks,
+you don't need a complex automation engine—just a simple "Voice-to-URL" bridge.
