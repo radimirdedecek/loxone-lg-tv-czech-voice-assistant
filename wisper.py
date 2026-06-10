@@ -7,10 +7,9 @@ from thefuzz import fuzz
 import time
 import asyncio
 import threading
+from util import speak, get_config
 from lg_tv import send_lg_cmd
 from loxone import async_send_lox_cmd
-import subprocess
-from pathlib import Path
 
 # --- CONFIG ---
 WHISPER_MODEL_SIZE = "small"  # Options: 'tiny', 'base', 'small' , "medium" (small is great for Czech)
@@ -55,15 +54,9 @@ commands = {
     "vypni zvuk": ("lg", "mute on"),
     "hlasitejc": ("lg", "+"),
     "potisejc": ("lg", "-"),
+    # OTHER Commands
+    "precti prikazy": ("cmd", "prikazy"),
 }
-
-
-def speak(audio_file_name):
-    BASE_DIR = Path(__file__).resolve().parent
-    if not audio_file_name.endswith(".mp3"):
-        audio_file_name += ".mp3"
-    audio_file = BASE_DIR / "messages" / audio_file_name
-    subprocess.Popen(["pw-play", audio_file])
 
 
 def run_command(command_tuple):
@@ -81,6 +74,11 @@ def run_command(command_tuple):
         targets, actions = cmd_data
         print(f"CALLING LOXONE API: {targets}/{actions}")
         threading.Thread(target=lambda: asyncio.run(async_send_lox_cmd(targets, actions)), daemon=True).start()
+        return "OK"
+    elif system_type == "cmd":
+        print(f"CALLING OTHER Commands: {cmd_data}")
+        for c in commands:
+            print(c)
         return "OK"
     print(f"❌ ERROR: command system '{system_type}' not recognized")
     return None
@@ -121,12 +119,6 @@ def process_smart_home_intent(raw_text):
     return ["❌ Command not Recognised", None]
 
 
-# --- TEST ---
-# [target_phrase, cmd] = process_smart_home_intent("avri branu")
-# [target_phrase, cmd] = process_smart_home_intent("Zauři šeluzie")
-# exit()
-
-
 def record_command(recorder, duration=3):
     """Records audio for a fixed duration after the wake word"""
     print(f"Listening to command for {duration}s...")
@@ -156,49 +148,56 @@ def record_command(recorder, duration=3):
 
 def wisper():
     print("Loading Whisper Czech Brain... (Please wait, downloading if first time)")
-    # Initialize Whisper first, You can use 8 or 12 threads on a Xeon!
     speak("co_chces")
-    whisper = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=8)
-
-    # NOW initialize and start the recorder
     recorder = PvRecorder(frame_length=1280, device_index=-1)
+    whisper = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=8)
+    try:
+        print("Whisper Ready! Now recording...")
+        recorder.start()
 
-    print("Whisper Ready! Now recording...")
+        # 1. Record
+        audio_file = record_command(recorder, duration=4)
+        recorder.stop()  # Stop recording so CPU can focus on transcribing
 
-    recorder.start()
+        print("Transcribing...")
+        # 2. Transcribe using the global instance
+        segments, info = whisper.transcribe(
+            audio_file,
+            language="cs",
+            beam_size=5,  # Better accuracy for "Zavři"
+            vad_filter=True,  # Removes silence before processing
+            # word_timestamps=True,  # Faster if you don't need timing
+            initial_prompt="zavři, otevři, žaluzie, rozsviť, zhasni, světlo, ztlum, zapni, vypni, obýváku, kuchyni, terasu, bránu, hlasitěji, potišeji",
+        )
 
-    # 1. Record
-    audio_file = record_command(recorder, duration=4)
-    recorder.stop()  # Stop recording so CPU can focus on transcribing
+        # segments, _ = whisper.transcribe(audio_file, language="cs")
+        full_text = "".join([s.text for s in segments])
 
-    print("Transcribing...")
-    # 2. Transcribe
-    # Use these settings for the best Czech speed/accuracy balance
-    segments, info = whisper.transcribe(
-        audio_file,
-        language="cs",
-        beam_size=5,  # Better accuracy for "Zavři"
-        vad_filter=True,  # Removes silence before processing
-        # word_timestamps=True,  # Faster if you don't need timing
-        initial_prompt="zavři, otevři, žaluzie, rozsviť, zhasni, světlo, ztlum, zapni, vypni, obýváku, kuchyni, terasu, bránu, hlasitěji, potišeji",
-    )
-
-    # segments, _ = whisper.transcribe(audio_file, language="cs")
-    full_text = "".join([s.text for s in segments])
-
-    # 3. Process
-    msg_text, cmd_tuple = process_smart_home_intent(full_text)
-    if cmd_tuple is None:
-        print("❌ Nerozumím")
-        speak("nerozumim")
-    else:
-        print(f"Matched: {cmd_tuple} -> {cmd_tuple}")
-        speak("provedu")
-        status = run_command(cmd_tuple)
-        time.sleep(2)
-        if status is None:
-            speak("error")
+        # 3. Process
+        msg_text, cmd_tuple = process_smart_home_intent(full_text)
+        if cmd_tuple is None:
+            print("❌ Nerozumím")
+            speak("nerozumim")
         else:
-            speak("hotovo")
+            print(f"Matched: {cmd_tuple} -> {cmd_tuple}")
+            speak("provedu")
+            status = run_command(cmd_tuple)
+            time.sleep(2)
+            if status is None:
+                speak("error")
+            else:
+                speak("hotovo")
+    except Exception as e:
+        print(f"❌ Critical failure during command processing: {e}")
+        speak("error")
+    finally:
+        # This code ALWAYS runs, even if the transcription crashes completely!
+        recorder.delete()
 
-    recorder.delete()
+
+if __name__ == "__main__":
+    # --- TEST ---
+    # [target_phrase, cmd] = process_smart_home_intent("avri branu")
+    # [target_phrase, cmd] = process_smart_home_intent("Zauři šeluzie")
+    for c in commands:
+        print(c)

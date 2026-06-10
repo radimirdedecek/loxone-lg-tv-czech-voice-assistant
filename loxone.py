@@ -1,19 +1,22 @@
 import requests
-from requests.auth import HTTPBasicAuth
 import asyncio
 import xml.etree.ElementTree as ET
+from requests.auth import HTTPBasicAuth
+from util import get_config, initialize_var
 
-# --- CONFIG ---
-LOX_IP = "192.168.88.6"
-LOX_USER = "budulin33"
-LOX_PASS = "aafd134*zvc@57"
+
+def get_response(target, str):
+    cfg = get_config()
+    return requests.get(
+        f"http://{cfg["LOX_IP"]}/dev/sps/io/{target}/{str}",
+        auth=HTTPBasicAuth(cfg["LOX_USER"], cfg["LOX_PASS"]),
+        timeout=2,
+    )
 
 
 def get_blind_position(target):
-    """Parses StatePos from the /all XML response"""
-    url = f"http://{LOX_IP}/dev/sps/io/{target}/all"
     try:
-        response = requests.get(url, auth=HTTPBasicAuth(LOX_USER, LOX_PASS), timeout=2)
+        response = get_response(target, "all")
         if response.status_code == 200:
             root = ET.fromstring(response.content)
             # Find StatePos in the XML attributes
@@ -34,9 +37,7 @@ async def async_send_lox_cmd(targets, actions):
         # 1. Start the movement
         for target in target_list:
             try:
-                response = requests.get(
-                    f"http://{LOX_IP}/dev/sps/io/{target}/down", auth=HTTPBasicAuth(LOX_USER, LOX_PASS), timeout=2
-                )
+                response = get_response(target, "down")
                 if response.status_code == 200:
                     print(f"⬇️ {target} is moving down...")
                 else:
@@ -59,24 +60,28 @@ async def async_send_lox_cmd(targets, actions):
                 await asyncio.sleep(1.5)
 
             # 3. Tilt the slats
-            requests.get(
-                f"http://{LOX_IP}/dev/sps/io/{target}/shade", auth=HTTPBasicAuth(LOX_USER, LOX_PASS), timeout=2
-            )
-            print(f"🌗 {target} is now shaded (tilted).")
-
+            try:
+                response = get_response(target, "shade")
+                print(f"🌗 {target} is now shaded (tilted).")
+            except Exception as e:
+                print(f"❌ Shading command failed for {target}: {e}")
     else:
         # Standard logic for up/on/off
         for target in target_list:
             for action in action_list:
-                requests.get(
-                    f"http://{LOX_IP}/dev/sps/io/{target}/{action}", auth=HTTPBasicAuth(LOX_USER, LOX_PASS), timeout=2
-                )
+                try:
+                    response = get_response(target, action)
+                    if response.status_code != 200:
+                        print(f"⚠️ Miniserver rejected {action} for {target}: {response.status_code}")
+                except Exception as e:
+                    print(f"❌ Physical connection failed to trigger {target}: {e}")
                 await asyncio.sleep(0.2)
     print(f"✅ async_send_lox_cmd OK!")
     return "OK"
 
 
 if __name__ == "__main__":
+    initialize_var()
     # Test SHADING
     # send_lox_cmd("z.kuchyn", "down")
     # send_lox_cmd("z.kuchyn", "up")
@@ -89,7 +94,8 @@ if __name__ == "__main__":
 
     # Test LIGHTS
     # asyncio.run(async_send_lox_cmd("sv.obyvak", "changeTo/3"))
-    # asyncio.run(async_send_lox_cmd("sv.obyvak", "AI1/off AI5/off AI7/off AI8/off"))
+    asyncio.run(async_send_lox_cmd("sv.obyvak", "AI1/off AI5/off AI7/off AI8/off"))
+    # asyncio.run(async_send_lox_cmd("sv.obyvak", "AI5/on"))
 
     # Test GATE
-    asyncio.run(async_send_lox_cmd("brana", "pulse"))
+    # asyncio.run(async_send_lox_cmd("brana", "pulse"))

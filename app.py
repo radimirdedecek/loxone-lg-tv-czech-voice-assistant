@@ -1,13 +1,15 @@
 import os
-from dotenv import load_dotenv
 import urllib.request
 import numpy as np
+import time
+import warnings
+from dotenv import load_dotenv
 from openwakeword.model import Model
 from pvrecorder import PvRecorder
 from pathlib import Path
-import time
 from wisper import wisper, speak
-import warnings
+from util import initialize_var
+from loxone import async_send_lox_cmd
 
 # Tell ONNX to stop looking for CUDA
 os.environ["ORT_LOGGING_LEVEL"] = "3"
@@ -34,30 +36,13 @@ def download_alexa_model():
             print(f"Download failed: {e}")
 
 
-def load_config(var_name):
-    var = os.getenv(var_name)
-    if var is None:
-        print(f"❌ ERROR: .env file, variable '{var_name}' not defined.")
-    return var
-
-
 def main():
+    if not initialize_var():
+        return
+
     download_alexa_model()
     if not os.path.exists(MODEL_PATH):
         print(f"❌ ERROR: model_path {MODEL_PATH} not found.")
-        return
-
-    print("Initializing env variables...")
-    if not os.path.exists(".env"):
-        print(f"❌ ERROR: .env file not found.")
-        return
-    load_dotenv()
-    TV_IP = load_config("TV_IP")
-    TV_MAC = load_config("TV_MAC")
-    LOX_IP = load_config("LOX_IP")
-    LOX_USER = load_config("LOX_USER")
-    LOX_PASS = load_config("LOX_PASS")
-    if None in [TV_IP, TV_MAC, LOX_IP, LOX_USER, LOX_PASS]:
         return
 
     print("Initializing openWakeWord...")
@@ -73,28 +58,27 @@ def main():
     speak("posloucham")
     try:
         while True:
-            pcm = recorder.read()
-            input_data = np.array(pcm, dtype=np.int16)
-
-            # 1. Get prediction
-            prediction = model.predict(input_data)
-            prob = prediction["alexa"]
-
-            # if prob > 0.15:
-            #     print(f"Match Confidence: {prob:.4f}", end="\r")
-
-            # 2. Trigger point
-            if prob >= 0.80:
-                print(f"\nDETECTED: ALEXA ({prob:.2f})")
-                wisper()
-                # NUCLEAR RESET: Re-create the model object to wipe everything
-                model = Model(wakeword_model_paths=[MODEL_PATH])
-                time.sleep(1.0)
-                print("\n\n\n\n\n" + "=" * 45)
-                print(">>> System Re-initialized.")
-                print(">>> ALEXA is Ready for next command.")
-                print("=" * 45)
-
+            try:
+                pcm = recorder.read()
+                input_data = np.array(pcm, dtype=np.int16)
+                prediction = model.predict(input_data)
+                prob = prediction["alexa"]
+                # if prob > 0.15: print(f"Match Confidence: {prob:.4f}", end="\r")
+                # 2. Trigger point
+                if prob >= 0.80:
+                    print(f"\nDETECTED: ALEXA ({prob:.2f})")
+                    wisper()
+                    # NUCLEAR RESET: Re-create the model object to wipe everything
+                    model = Model(wakeword_model_paths=[MODEL_PATH])
+                    time.sleep(1.0)
+                    print("\n\n\n\n\n" + "=" * 45)
+                    print(">>> System Re-initialized.")
+                    print(">>> ALEXA is Ready for next command.")
+                    print("=" * 45)
+            except Exception as loop_error:
+                print(f"⚠️ Internal engine hiccup: {loop_error}. Auto-recovering stack...")
+                time.sleep(2)
+                continue  # Keeps the loop alive no matter what
     except KeyboardInterrupt:
         print("\nExiting...")
     finally:

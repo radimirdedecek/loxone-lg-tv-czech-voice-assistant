@@ -1,24 +1,24 @@
 import json
 import os
+import time
 from pywebostv.connection import WebOSClient
 from pywebostv.controls import SystemControl, MediaControl
 from wakeonlan import send_magic_packet
-import time
-
-TV_IP = "192.168.88.250"
-TV_MAC = "A8.23.FE.DB.36.48"
-TOKEN_FILE = "tv_token.json"
-VOLUME_STEP = 10
-VOLUME_PAUSE = 0.5
+from util import get_config
 
 
 def send_lg_cmd(cmd):  # +,-,off,on,mute on, mute off
+    cfg = get_config()
+    TOKEN_FILE = "tv_token.json"
+    VOLUME_STEP = 10
+    VOLUME_PAUSE = 0.5
+
     if cmd == "on":
-        send_magic_packet(TV_MAC)
+        send_magic_packet(cfg["TV_MAC"])
         print(f"send_magic_packet to turn TV ON")
         return ["Processed successfully", "OK"]
 
-    client = WebOSClient(TV_IP)
+    client = WebOSClient(cfg["TV_IP"])
     try:
         client.connect()
     except Exception as e:
@@ -75,6 +75,6 @@ def send_lg_cmd(cmd):  # +,-,off,on,mute on, mute off
 
 
 if __name__ == "__main__":
-    # 1. Test the one that worked before
+    # Testing
     # send_lg_cmd("off")  # +,-,off,on,mute on, mute off
     send_lg_cmd("mute on")  # +,-,off,on,mute on, mute off
