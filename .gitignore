@@ -8,6 +8,7 @@ ENV/
 .env
 tts_google_api.py
 command.wav
+output.mp3
 
 # Secrets & Configs
 *.secret
