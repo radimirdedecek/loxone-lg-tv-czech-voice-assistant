@@ -7,7 +7,7 @@ from thefuzz import fuzz
 import time
 import asyncio
 import threading
-from util import speak, get_config
+from util import speak, play
 from lg_tv import send_lg_cmd
 from loxone import async_send_lox_cmd
 
@@ -15,48 +15,52 @@ from loxone import async_send_lox_cmd
 WHISPER_MODEL_SIZE = "small"  # Options: 'tiny', 'base', 'small' , "medium" (small is great for Czech)
 commands = {
     # LOXONE shading
-    "zavri zaluzie v kuchyni": ("lox", ("z.kuchyn", "down")),
-    "zavri zaluzie v obyvaku": ("lox", ("z.obyvak", "down")),
-    "zavri zaluzie na terasu": ("lox", ("z.terasa", "down")),
-    "dej zaluzie v kuchyni dolu": ("lox", ("z.kuchyn", "down")),
-    "dej zaluzie v obyvaku dolu": ("lox", ("z.obyvak", "down")),
-    "dej zaluzie na terasu dolu": ("lox", ("z.terasa", "down")),
-    "dej zaluzie v kuchyni nahoru": ("lox", ("z.kuchyn", "up")),
-    "dej zaluzie v obyvaku nahoru": ("lox", ("z.obyvak", "up")),
-    "dej zaluzie na terasu nahoru": ("lox", ("z.terasa", "up")),
-    "zavri zaluzie": ("lox", ("z.kuchyn z.obyvak z.terasa", "down")),
-    "otevri zaluzie v kuchyni": ("lox", ("z.kuchyn", "down shade")),
-    "otevri zaluzie v obyvaku": ("lox", ("z.obyvak", "down shade")),
-    "otevri zaluzie na terasu": ("lox", ("z.terasa", "down shade")),
-    "otevri zaluzie": ("lox", ("z.kuchyn z.obyvak z.terasa", "down shade")),
+    "zavři žaluzie v kuchyni": ("lox", ("z.kuchyn", "down")),
+    "zavři žaluzie v obýváku": ("lox", ("z.obyvak", "down")),
+    "zavři žaluzie na terasu": ("lox", ("z.terasa", "down")),
+    "dej žaluzie v kuchyni dolu": ("lox", ("z.kuchyn", "down")),
+    "dej žaluzie v obýváku dolu": ("lox", ("z.obyvak", "down")),
+    "dej žaluzie na terasu dolu": ("lox", ("z.terasa", "down")),
+    "dej žaluzie v kuchyni nahoru": ("lox", ("z.kuchyn", "up")),
+    "dej žaluzie v obýváku nahoru": ("lox", ("z.obyvak", "up")),
+    "dej žaluzie na terasu nahoru": ("lox", ("z.terasa", "up")),
+    "zavři žaluzie": ("lox", ("z.kuchyn z.obyvak z.terasa", "down")),
+    "otevři žaluzie v kuchyni": ("lox", ("z.kuchyn", "down shade")),
+    "otevři žaluzie v obýváku": ("lox", ("z.obyvak", "down shade")),
+    "otevři žaluzie na terasu": ("lox", ("z.terasa", "down shade")),
+    "otevři žaluzie": ("lox", ("z.kuchyn z.obyvak z.terasa", "down shade")),
     # LOXONE lights
-    "rozsvit svetlo": ("lox", ("sv.obyvak", "2")),
-    "rozsvit stredni svetlo": ("lox", ("sv.obyvak", "2")),
-    "rozsvit svetlo naplno": ("lox", ("sv.obyvak", "on")),
-    "rozsvit svetlo na maximum": ("lox", ("sv.obyvak", "on")),
-    "zhasni svetlo": ("lox", ("sv.obyvak", "off")),
-    "rozsvit nocni svetlo": ("lox", ("sv.obyvak", "3")),
-    "ztlum svetlo": ("lox", ("sv.obyvak", "3")),
-    "rozsvit nad stolem": ("lox", ("sv.obyvak", "V2/on")),
-    "zhasni nad stolem": ("lox", ("sv.obyvak", "V2/off")),
-    "rozsvit v kuchyni": ("lox", ("sv.obyvak", "AI5/on")),
+    "rozsviť světlo": ("lox", ("sv.obyvak", "2")),
+    "rozsviť střední světlo": ("lox", ("sv.obyvak", "2")),
+    "rozsviť světlo naplno": ("lox", ("sv.obyvak", "on")),
+    "rozsviť světlo na maximum": ("lox", ("sv.obyvak", "on")),
+    "zhasni světlo": ("lox", ("sv.obyvak", "off")),
+    "rozsviť noční světlo": ("lox", ("sv.obyvak", "3")),
+    "ztlum světlo": ("lox", ("sv.obyvak", "3")),
+    "rozsviť nad stolem": ("lox", ("sv.obyvak", "AI2/on")),
+    "zhasni nad stolem": ("lox", ("sv.obyvak", "AI2/off")),
+    "rozsviť v kuchyni": ("lox", ("sv.obyvak", "AI5/on")),
     "zhasni v kuchyni": ("lox", ("sv.obyvak", "AI1/off AI5/off AI7/off AI8/off")),
-    "rozsvit v obyvaku": ("lox", ("sv.obyvak", "AI3/on")),
-    "zhasni v obyvaku": ("lox", ("sv.obyvak", "AI3/off")),
-    "zhasni lampicku": ("lox", ("zasuvka.obyvak", "off on")),
+    "rozsviť v obýváku": ("lox", ("sv.obyvak", "AI3/on")),
+    "zhasni v obýváku": ("lox", ("sv.obyvak", "AI3/off")),
+    "zhasni lampičku": ("lox", ("zasuvka.obyvak", "off on")),
     # LOXONE gate
-    "zavri branu": ("lox", ("brana", "pulse")),
-    "otevri branu": ("lox", ("brana", "pulse")),
+    "zavři bránu": ("lox", ("brana", "pulse")),
+    "otevři bránu": ("lox", ("brana", "pulse")),
     # LG TV Commands
     "zapni televizi": ("lg", "on"),
     "vypni televizi": ("lg", "off"),
     "zapni zvuk": ("lg", "mute off"),
     "vypni zvuk": ("lg", "mute on"),
-    "hlasitejc": ("lg", "+"),
-    "potisejc": ("lg", "-"),
+    "hlasitěji": ("lg", "+"),
+    "potišeji": ("lg", "-"),
     # OTHER Commands
-    "precti prikazy": ("cmd", "prikazy"),
+    "prečti příkazy": ("cmd", "prikazy"),
+    "prečti seznam": ("cmd", "prikazy"),
 }
+
+print("Loading Whisper Czech Brain... (Please wait, downloading if first time)")
+whisper = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=8)
 
 
 def run_command(command_tuple):
@@ -77,8 +81,9 @@ def run_command(command_tuple):
         return "OK"
     elif system_type == "cmd":
         print(f"CALLING OTHER Commands: {cmd_data}")
-        for c in commands:
-            print(c)
+        for txt in commands:
+            play(txt)
+            time.sleep(3)
         return "OK"
     print(f"❌ ERROR: command system '{system_type}' not recognized")
     return None
@@ -104,7 +109,7 @@ def process_smart_home_intent(raw_text):
             continue
 
         # 2. Compare the collapsed strings
-        # This solves the "zeluz je" vs "zaluzie" problem
+        # This solves the "zeluz je" vs "žaluzie" problem
         score = fuzz.ratio(collapsed_spoken, collapsed_target)
 
         if score > highest_score:
@@ -125,17 +130,6 @@ def record_command(recorder, duration=3):
     frames = []
     for _ in range(0, int(16000 / 1280 * duration)):
         frames.extend(recorder.read())
-
-    # # This stretches the volume to the maximum clear level
-    # audio_data = np.array(frames, dtype=np.int16)
-    # audio_data = audio_data.astype(np.float32)
-    # max_val = np.max(np.abs(audio_data))
-    # if max_val > 0:
-    #     audio_data = audio_data / max_val
-    # audio_data = (audio_data * 32767).astype(np.int16)
-    # # ---------------------------------
-
-    # Save to temporary file for Whisper
     temp_file = "command.wav"
     with wave.open(temp_file, "wb") as wf:
         wf.setnchannels(1)
@@ -147,16 +141,15 @@ def record_command(recorder, duration=3):
 
 
 def wisper():
-    print("Loading Whisper Czech Brain... (Please wait, downloading if first time)")
     speak("co_chces")
+    time.sleep(1.2)
     recorder = PvRecorder(frame_length=1280, device_index=-1)
-    whisper = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=8)
     try:
         print("Whisper Ready! Now recording...")
         recorder.start()
 
         # 1. Record
-        audio_file = record_command(recorder, duration=4)
+        audio_file = record_command(recorder, duration=3)
         recorder.stop()  # Stop recording so CPU can focus on transcribing
 
         print("Transcribing...")
@@ -164,7 +157,10 @@ def wisper():
         segments, info = whisper.transcribe(
             audio_file,
             language="cs",
-            beam_size=5,  # Better accuracy for "Zavři"
+            beam_size=4,  # 1 - fast, 5 - Better accuracy for "Zavři"
+            # best_of=1,  # NEW PARAM: Don't waste CPU evaluating multiple variations
+            # temperature=0,  # NEW PARAM: Force direct deterministic text generation
+            # vad_parameters=dict(min_silence_duration_ms=300),  # NEW PARAM: Cut trailing silence fast
             vad_filter=True,  # Removes silence before processing
             # word_timestamps=True,  # Faster if you don't need timing
             initial_prompt="zavři, otevři, žaluzie, rozsviť, zhasni, světlo, ztlum, zapni, vypni, obýváku, kuchyni, terasu, bránu, hlasitěji, potišeji",
@@ -174,6 +170,7 @@ def wisper():
         full_text = "".join([s.text for s in segments])
 
         # 3. Process
+        print("Processing...")
         msg_text, cmd_tuple = process_smart_home_intent(full_text)
         if cmd_tuple is None:
             print("❌ Nerozumím")
@@ -199,5 +196,7 @@ if __name__ == "__main__":
     # --- TEST ---
     # [target_phrase, cmd] = process_smart_home_intent("avri branu")
     # [target_phrase, cmd] = process_smart_home_intent("Zauři šeluzie")
-    for c in commands:
-        print(c)
+
+    for txt in commands:
+        play(txt)
+        time.sleep(3)

@@ -2,6 +2,15 @@ import subprocess
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from gtts import gTTS
+
+
+def play(txt):
+    audio_file = "output.mp3"
+    language = "cs"
+    tts = gTTS(text=txt, lang=language)
+    tts.save(str(audio_file))
+    subprocess.Popen(["pw-play", audio_file])
 
 
 def speak(audio_file_name):

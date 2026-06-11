@@ -76,6 +76,8 @@ async def async_send_lox_cmd(targets, actions):
                 except Exception as e:
                     print(f"❌ Physical connection failed to trigger {target}: {e}")
                 await asyncio.sleep(0.2)
+                if "zasuvka.obyvak" in target:
+                    await asyncio.sleep(1.2)
     print(f"✅ async_send_lox_cmd OK!")
     return "OK"
 
@@ -94,8 +96,10 @@ if __name__ == "__main__":
 
     # Test LIGHTS
     # asyncio.run(async_send_lox_cmd("sv.obyvak", "changeTo/3"))
-    asyncio.run(async_send_lox_cmd("sv.obyvak", "AI1/off AI5/off AI7/off AI8/off"))
+    # asyncio.run(async_send_lox_cmd("sv.obyvak", "AI1/off AI5/off AI7/off AI8/off"))
+    # asyncio.run(async_send_lox_cmd("zasuvka.obyvak", "off on"))
     # asyncio.run(async_send_lox_cmd("sv.obyvak", "AI5/on"))
+    asyncio.run(async_send_lox_cmd("sv.obyvak", "AI2/on"))
 
     # Test GATE
     # asyncio.run(async_send_lox_cmd("brana", "pulse"))
