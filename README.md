@@ -1,6 +1,8 @@
-# Czech Voice Assistant for Loxone Miniserver & LG TV
+# Český hlasový asistent pro Loxone Miniserver & LG TV
+Autonomní hlasový asistent navržený pro nepřetržitý provoz (24/7) v češtině, který umožňuje plné ovládání Loxone Miniserveru a LG Smart TV bez závislosti na internetovém připojení a bez nutnosti integrace do robustních platforem jako je Home Assistant. Systém poskytuje absolutní svobodu v ovládání libovolných vstupů/výstupů funkčních bloků v Loxone. Uživatel si může pro každou akci definovat libovolné klíčové fráze v přirozené češtině, včetně podpory více různých výrazů pro stejný povel.
 
-An efficient, robust, localized smart home offline voice assistant tailored for Czech speech syntax. The system runs 24/7 on local workstation environments, using specialized edge AI libraries for instantaneous hotword identification and audio transcription without cloud processing dependencies.
+# Czech Voice Assistant for Loxone Miniserver & LG TV
+A fully offline, privacy-first Python voice assistant engineered for 24/7 local smart home deployment. This system enables direct control over Loxone Miniserver states and LG webOS Smart TVs without cloud dependencies or complex middle-layer integrations like Home Assistant. It provides granular execution mapping across any operational Loxone functional block input/output. Users can provision highly custom voice trigger phrases using natural Czech syntax, supporting multiple lexical variations mapped directly to the same hardware command array.
 
 ---
 
