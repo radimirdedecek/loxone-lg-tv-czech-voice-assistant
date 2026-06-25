@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from openwakeword.model import Model
 from pvrecorder import PvRecorder
 from pathlib import Path
-from wisper import wisper, speak
+from wisper import wisper, speak_and_wait
 from util import initialize_var
 from loxone import async_send_lox_cmd
 
@@ -55,7 +55,7 @@ def main():
     print("\n" + "=" * 45)
     print(" >>> SYSTEM ACTIVE: ALEXA is Ready <<<")
     print("=" * 45 + "\n")
-    speak("posloucham")
+    speak_and_wait("posloucham", True)
     try:
         while True:
             try:
@@ -70,7 +70,7 @@ def main():
                     wisper()
                     # NUCLEAR RESET: Re-create the model object to wipe everything
                     model = Model(wakeword_model_paths=[MODEL_PATH])
-                    time.sleep(1.0)
+                    # time.sleep(1.0)
                     print("\n\n\n\n\n" + "=" * 45)
                     print(">>> System Re-initialized.")
                     print(">>> ALEXA is Ready for next command.")
