@@ -3,13 +3,11 @@ import urllib.request
 import numpy as np
 import time
 import warnings
-from dotenv import load_dotenv
 from openwakeword.model import Model
 from pvrecorder import PvRecorder
 from pathlib import Path
 from wisper import wisper, speak_and_wait
 from util import initialize_var
-from loxone import async_send_lox_cmd
 
 # Tell ONNX to stop looking for CUDA
 os.environ["ORT_LOGGING_LEVEL"] = "3"

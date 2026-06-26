@@ -28,6 +28,23 @@ def get_blind_position(target):
     return None
 
 
+def is_voice_control_allowed() -> bool:
+    try:
+        response = get_response("ezs 1 noc", "all")
+        if response.status_code == 200:
+            root = ET.fromstring(response.content)
+            block_value = root.get("value")
+            if block_value == "1":
+                print("🔒 Night Alarm (EZS) is ON. ❌ Voice control disabled for security.")
+                return False
+            print("🔒 Night Alarm (EZS) is OFF. ✅ Voice control enabled.")
+            return True
+        print(f"⚠️ Failed to read Loxone alarm state: {response.status_code}")
+    except Exception as e:
+        print(f"⚠️ Failed to read Loxone alarm state: {e}")
+    return False
+
+
 async def async_send_lox_cmd(targets, actions):
     print(f"🏠 Loxone: Sending {actions} to {targets}...")
     target_list = targets.split()
@@ -99,7 +116,8 @@ if __name__ == "__main__":
     # asyncio.run(async_send_lox_cmd("sv.obyvak", "AI1/off AI5/off AI7/off AI8/off"))
     # asyncio.run(async_send_lox_cmd("zasuvka.obyvak", "off on"))
     # asyncio.run(async_send_lox_cmd("sv.obyvak", "AI5/on"))
-    asyncio.run(async_send_lox_cmd("sv.obyvak", "AI2/on"))
+    # asyncio.run(async_send_lox_cmd("sv.obyvak", "AI2/on"))
 
     # Test GATE
     # asyncio.run(async_send_lox_cmd("brana", "pulse"))
+    print(is_voice_control_allowed())

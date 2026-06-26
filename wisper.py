@@ -11,7 +11,7 @@ from unidecode import unidecode
 from thefuzz import fuzz
 from util import speak_and_wait, play, tea_timer, beep_start, beep_end
 from lg_tv import send_lg_cmd
-from loxone import async_send_lox_cmd
+from loxone import async_send_lox_cmd, is_voice_control_allowed
 
 # --- CONFIG ---
 WHISPER_MODEL_SIZE = "small"  # Options: 'tiny', 'base', 'small' , "medium" (small is great for Czech)
@@ -184,6 +184,9 @@ def record_command(recorder, duration=3):
 
 
 def wisper():
+    if not is_voice_control_allowed():
+        # Actively ignore the wake word and loop back to listening
+        return
     speak_and_wait("co_chces", True)
     recorder = PvRecorder(frame_length=1280, device_index=-1)
     try:
