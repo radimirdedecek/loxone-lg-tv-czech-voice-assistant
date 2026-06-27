@@ -65,7 +65,7 @@ commands = {
 }
 
 print("Loading Whisper Czech Brain... (Please wait, downloading if first time)")
-whisper = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=8)
+whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=8)
 
 
 def generate_initial_prompt(commands_dict):
@@ -183,7 +183,7 @@ def record_command(recorder, duration=3):
     return audio_array
 
 
-def wisper():
+def whisper():
     if not is_voice_control_allowed():
         # Actively ignore the wake word and loop back to listening
         return
@@ -201,7 +201,7 @@ def wisper():
         print("Transcribing...")
         audio_data_float32 = audio_data_int16.astype(np.float32) / 32768.0
         # Transcribe using the global instance
-        segments, info = whisper.transcribe(
+        segments, info = whisper_model.transcribe(
             # audio_file,
             audio_data_float32,   # new ✅ Passed directly as a RAM object!
             language="cs",

@@ -6,7 +6,7 @@ import warnings
 from openwakeword.model import Model
 from pvrecorder import PvRecorder
 from pathlib import Path
-from wisper import wisper, speak_and_wait
+from whisper import whisper, speak_and_wait
 from util import initialize_var
 
 # Tell ONNX to stop looking for CUDA
@@ -65,7 +65,7 @@ def main():
                 # 2. Trigger point
                 if prob >= 0.80:
                     print(f"\nDETECTED: ALEXA ({prob:.2f})")
-                    wisper()
+                    whisper()
                     # NUCLEAR RESET: Re-create the model object to wipe everything
                     model = Model(wakeword_model_paths=[MODEL_PATH])
                     # time.sleep(1.0)

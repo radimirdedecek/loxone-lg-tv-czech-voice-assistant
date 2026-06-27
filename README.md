@@ -20,14 +20,18 @@ The assistant leverages a pipeline that maximizes local hardware configurations 
 
   ```text
   .
-  ├── app.py               # Application entryway & primary 24/7 wake word tracking loop
-  ├── wisper.py            # Whisper model lifecycle, intent-matching & string-distance logic
-  ├── loxone.py            # Miniserver HTTP/XML communication layer & blind tracking loops
-  ├── lg_tv.py             # LG webOS TV API control interface with Wake-on-LAN recovery
-  ├── util.py              # System audio playback wrapper (`pw-play`) & environment config guards
-  ├── .env.example         # Template configuration containing credential mapping tokens
-  ├── oww_models/          # Cached ONNX runtime localized wake word target binaries
-  └── messages/            # System response feedback confirmation audio files
+  ├── .env.example          # Template configuration containing credential mapping tokens
+  ├── app.py                # Application entryway & primary 24/7 wake word tracking loop
+  ├── lg_tv.py              # LG webOS TV API control interface with Wake-on-LAN recovery
+  ├── LICENSE               # Github license
+  ├── loxone.py             # Miniserver HTTP/XML communication layer & blind tracking loops
+  ├── messages/             # System response feedback confirmation audio files
+  ├── oww_models/           # Cached ONNX runtime localized wake word target binaries
+  ├── README.md             # Github readme
+  ├── requirements.txt      # Python requirements
+  ├── tv_token.json_example # Template configuration containing credential mapping tokens
+  ├── util.py               # System audio playback wrapper (`pw-play`) & environment config guards
+  └── whisper.py            # Whisper model lifecycle, intent-matching & string-distance logic
   ```
 
 ## 🚀 Installation & Prerequisites
@@ -67,10 +71,103 @@ To prevent your Jabra hardware puck or audio system from dropping connection dur
     ```bash
     sudo vi /etc/default/grub
     ```
-  Add `usbcore.autosuspend=-1` to your `GRUB_CMDLINE_LINUX_DEFAULT` string, save, and update:
+    Add `usbcore.autosuspend=-1` to your `GRUB_CMDLINE_LINUX_DEFAULT` string, save, and update:
     ```bash
     sudo update-grub
     ```  
+5. To prevent default Ubuntu Server power-saving:
+    ```bash
+    sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target  
+    ``` 
+### Create the Automation Service on WS
+1. Create a custom systemd configuration:
+    ```bash
+    mkdir -p ~/.config/systemd/user/
+    vi ~/.config/systemd/user/alexa.service
+    # add this content:
+    [Unit]
+    Description=Loxone Voice Assistant Background Service
+    After=pipewire.service wireplumber.service
+    [Service]
+    Type=simple
+    WorkingDirectory=/home/dr/98_loxone
+    # This executes python natively straight from your virtual environment!
+    ExecStart=/home/dr/98_loxone/.venv/bin/python3 app.py
+    Restart=always
+    RestartSec=5
+    # Ensures prints show up in logs immediately instead of waiting in buffers
+    Environment=PYTHONUNBUFFERED=1
+    [Install]
+    WantedBy=default.target
+
+    # Save and exit
+    ``` 
+2. Enable Autostart on Boot:
+    ```bash
+    # Reload the systemd daemon to see your new service
+    systemctl --user daemon-reload
+
+    # Enable it so it boots automatically every time the WS turns on
+    systemctl --user enable alexa.service
+
+    # Start the service right now in the background!
+    systemctl --user start alexa.service 
+    ``` 
+
+3. How to Manage the App Natively:
+    ```bash
+    # Check if it is currently running:
+    systemctl --user status alexa.service
+
+    # Stop the auto-run to do manual testing/debugging:
+    systemctl --user stop alexa.service
+
+    # Start it back up when you are done testing:
+    systemctl --user start alexa.service
+
+    # Restart the code after you make an edit in VS Code:
+    systemctl --user restart alexa.service
+
+    # Tracking the Logs Natively:
+    journalctl --user -u alexa.service -f -o cat
+
+    # usefull aliases:
+    alias alexalog="journalctl --user -u alexa.service -f -o cat"
+    alias alexastart="systemctl --user start alexa.service"
+    alias alexastop="systemctl --user stop alexa.service"
+    alias alexarestart="systemctl --user restart alexa.service"
+    ``` 
+4. Switch WS to Server Mode (Headless / No Desktop)
+    ```bash
+    # To completely disable the desktop interface (Saves massive RAM & CPU):
+    sudo systemctl set-default multi-user.target
+
+    # How to turn the desktop back ON (If you ever need it in the future):
+    sudo systemctl set-default graphical.target
+
+    # Grant Your User Group Access to Audio Hardware. Since there is no desktop session managing permissions anymore,
+    # your user account (<username>) needs direct, explicit access to the system sound boards.
+    sudo usermod -aG audio,video <username>
+
+    # Enable "User Lingering" (The Headless Server Fix):
+    sudo loginctl enable-linger <username>
+
+    # Now, restart the workstation
+    sudo reboot
+    ``` 
+5. Automate Hibernation (23:00 to 06:00)
+    ```bash
+    # Open the system's root automation schedule config:
+    sudo crontab -e
+
+    # add these two specific automation commands at the end:
+      # 1. Every night at 23:00, tell the motherboard hardware to wake up at 06:00 AM
+      0 23 * * * rtcwake -m no -t $(date -d "tomorrow 06:00" +%s)
+
+      # 2. Every night at 23:01, execute a clean system shutdown sequence
+      1 23 * * * /sbin/shutdown -h now
+    ``` 
+
 
 ### 2. 📦 How to Install Necessary Files and SW on WS
 
@@ -123,14 +220,27 @@ To edit code from your daily driver PC without bloating your user-home backup st
 2. Create the target mirror directory and assign explicit user ownership:
     ```bash
     sudo mkdir -p /mnt/shared_ws
-    sudo chown -R dr:dr /mnt/shared_ws
+    sudo chown -R <username>:<username> /mnt/shared_ws
     ```
 
 3. Securely mount the folder over the network (No `sudo` required!):
     ```bash
-    sshfs dr@192.168.88.202:/home/dr/98_loxone /mnt/shared_ws
+    sshfs -o reconnect,ServerAliveInterval=15 <ws_username>@<ws_ip_address>:/home/<ws_username>/98_loxone /mnt/shared_ws
     ```
     Now you can open `/mnt/shared_ws` in VS Code on your PC to manage all files live on the server.
+
+4. When you want unmount point cleanly from your local file system, run this on your PC:  
+    ```bash
+    fusermount -u /mnt/shared_ws
+    ```
+
+5. When sshfs freezes. This typically happens if your WS went to sleep.
+Kill the Hanging Process, run this on your PC:  
+    ```bash
+    sudo killall -9 sshfs
+    sudo umount -l /mnt/shared_ws
+    ```
+
 
 ### 4. 🚀 How to Login from PC to WS and Run the App
 
@@ -138,7 +248,7 @@ Whenever you want to run the assistant framework manually or look at standard lo
 
 1. Open your terminal on your PC and SSH directly into the processing hardware pool of WS:
     ```bash
-    ssh dr@192.168.88.202
+    ssh <ws_username>@<ws_ip_address>
     ```
 2. Jump into the project scope, activate the native compiler context, and trigger execution:
     ```bash
@@ -147,12 +257,6 @@ Whenever you want to run the assistant framework manually or look at standard lo
     python3 app.py
     ```
 
-### 5. 🛑 Disconnecting the File Bridge
-When you are done developing and want to sever the directory mount point cleanly from your local file system, run this on your PC:  
-
-```bash
-fusermount -u /mnt/shared_ws
-```
 
 ## 🤖 Intent Architecture & Commands
 
