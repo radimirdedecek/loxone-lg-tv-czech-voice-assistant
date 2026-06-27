@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from gtts import gTTS
 
 required_vars = ["TV_IP", "TV_MAC", "LOX_IP", "LOX_USER", "LOX_PASS", "BEEP_START", "BEEP_END"]
+ALEXA_MUTED = False
 
 
 def initialize_var():
@@ -111,6 +112,7 @@ def tea_timer(min, txt):
 def listen_for_loxone_sleep():
     UDP_IP = "0.0.0.0"       # Listen on all local interfaces
     UDP_PORT = 5005          # Choose any free custom port
+    global ALEXA_MUTED
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((UDP_IP, UDP_PORT))
@@ -118,9 +120,19 @@ def listen_for_loxone_sleep():
     print(f"Loxone Sleep Listener active on port {UDP_PORT}...")
     while True:
         data, addr = sock.recvfrom(1024)
-        if data.decode('utf-8').strip() == "sleep_ws":
+        command = data.decode('utf-8').strip()
+        if command == "sleep_ws":
             print("Received sleep command from Loxone! Triggering suspend...")
+            play("vypínám systém")
             os.system("echo mem | sudo tee /sys/power/state")
+        elif command == "stop_alexa":
+            ALEXA_MUTED = True
+            print("🛑 Alexa Voice Engine MUTED")
+            play("vypínám mikrofon, alexa neposlouchá příkazy")
+        elif command == "start_alexa":
+            ALEXA_MUTED = False
+            print("🟢 Alexa Voice Engine ACTIVE")
+            play("mikrofon zapnut, alexa poslouchá")
 
 
 if __name__ == "__main__":

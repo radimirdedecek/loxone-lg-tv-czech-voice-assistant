@@ -4,14 +4,15 @@ Autonomní hlasový asistent navržený pro nepřetržitý provoz (24/7) v češ
 # Czech Voice Assistant for Loxone Miniserver & LG TV
 A fully offline, privacy-first Python voice assistant engineered for 24/7 local smart home deployment. This system enables direct control over Loxone Miniserver states and LG webOS Smart TVs without cloud dependencies or complex middle-layer integrations like Home Assistant. It provides granular execution mapping across any operational Loxone functional block input/output. Users can provision highly custom voice trigger phrases using natural Czech syntax, supporting multiple lexical variations mapped directly to the same hardware command array.
 
-## 🚀 Key Features & Power Management
-* **Bidirectional Loxone Power Grid:**  
-  * **Remote Start:** Wake the Workstation instantly from the Loxone App using hardware-level Wake-on-LAN (WoL) broadcasts.
-  * **Remote Sleep:** Put the Workstation into a low-power system suspend (`mem` state) directly via UDP payloads to conserve energy when the house is armed or empty.
-* **Granular Process Control:** Stop or start the background voice engine service container cleanly from your smart home dashboard interface on demand.
-* **Diskless Audio Engine:** Audio responses are synthesized entirely inside RAM using virtual binary memory buffers (`io.BytesIO`) and piped directly to PipeWire (`pw-play`), completely eliminating hard drive wear and tear.
-* **Smart Hybrid TTS (Hybrid Online/Offline):** Uses high-quality Google TTS via an active stream by default. If the home internet connection drops, the engine automatically falls back to a 100% local, offline Czech female voice (`espeak -v cs+f3`) in less than a millisecond, guaranteeing your home automation never freezes.
-
+## 🚀 Key Features:
+* **Any Loxone Function:** Universal Loxone Mapping across any functional block input/output.
+* **Any Voice Command for Function:** Map customized natural language voice commands to any hardware target.
+* **More Voice Commands for same Function:** Bind multiple voice phrases to trigger the exact same action.
+* **Fully Offline:** Operates completely local and offline for core command handling.
+* **Remote Start/Sleep from Loxone Mniserver:** Wake the workstation up (Wake-on-LAN) or trigger a system sleep to conserve energy when the house is armed or empty.
+* **Remote Microphone Enable/Disable from Loxone APP:** Toggle microphone recording states (Mute/Unmute) on the fly directly inside the Loxone App.
+* **Diskless Audio Engine:** Audio responses are processed directly within RAM buffers, eliminating local storage write.
+* **Smart Hybrid TTS Backend:** Uses high-quality Google TTS by default. If the home internet connection drops, the engine automatically falls back to a 100% local, offline Czech voice.
 ---
 
 ## 🛠️ System Architecture
@@ -296,6 +297,7 @@ Whenever you want to run the assistant framework manually or look at standard lo
 
 
 ## 🤖 Intent Architecture & Commands
+**Loxone Block Names:** must be a single continuous string—using dots (.), underscores (_), or camelCase `!!!`
 
 The processing pipeline strips accent marks, enforces string-collapsing protocols via unidecode, and calculates token differences using fuzzy character ratio logic to protect accuracy against transcription variations (e.g., matching **"zeluz je"** securely to **"žaluzie"**).
 

@@ -8,7 +8,7 @@ from openwakeword.model import Model
 from pvrecorder import PvRecorder
 from pathlib import Path
 from whisper import whisper, speak_and_wait
-from util import initialize_var, listen_for_loxone_sleep
+import util
 
 # Tell ONNX to stop looking for CUDA
 os.environ["ORT_LOGGING_LEVEL"] = "3"
@@ -36,7 +36,7 @@ def download_alexa_model():
 
 
 def main():
-    if not initialize_var():
+    if not util.initialize_var():
         return
 
     download_alexa_model()
@@ -52,7 +52,7 @@ def main():
     recorder.start()
 
     # Start the Loxone UDP sleep listener in a separate thread
-    udp_thread = threading.Thread(target=listen_for_loxone_sleep, daemon=True)
+    udp_thread = threading.Thread(target=util.listen_for_loxone_sleep, daemon=True)
     udp_thread.start()
 
     print("\n" + "=" * 45)
@@ -63,6 +63,9 @@ def main():
         while True:
             try:
                 pcm = recorder.read()
+                if util.ALEXA_MUTED:
+                    time.sleep(0.5)
+                    continue  # Skip processing entirely if Loxone turned us off!
                 input_data = np.array(pcm, dtype=np.int16)
                 prediction = model.predict(input_data)
                 prob = prediction["alexa"]

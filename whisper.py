@@ -1,10 +1,9 @@
 import numpy as np
-import wave
 import time
 import asyncio
 import threading
 import re
-import struct
+import socket
 from pvrecorder import PvRecorder
 from faster_whisper import WhisperModel
 from unidecode import unidecode
@@ -66,6 +65,7 @@ commands = {
     "nastav pět minut": ("cmd", "5minut"),
     "nastav tři minuty": ("cmd", "3minuty"),
     "ale nic": ("cmd", "test"),
+    "vypni mikrofon": ("cmd", "mikrofon"),
     "kdo je tady nejkrásnější": ("cmd", "beautiful"),
 }
 
@@ -127,6 +127,10 @@ def run_command(command_tuple):
                 threading.Thread(target=lambda: tea_timer(min, cmd_data[1:]), daemon=True).start()
             else:
                 speak_and_wait("error", True)
+        elif cmd_data == "mikrofon":
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto("stop_alexa".encode('utf-8'), ("192.168.88.202", 5005))
+            sock.close()
         elif cmd_data == "beautiful":
             play("nejkrásnější široko daleko je sluníčko")
         elif cmd_data == "test":
