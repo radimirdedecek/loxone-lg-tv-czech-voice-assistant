@@ -1,6 +1,8 @@
 import subprocess
 import os
+import io
 import time
+import socket
 from pathlib import Path
 from dotenv import load_dotenv
 from gtts import gTTS
@@ -27,12 +29,54 @@ def get_config():
     return {key: os.getenv(key) for key in required_vars}
 
 
-def play(txt):
-    audio_file = "output.mp3"
+def play1(txt):
     language = "cs"
-    tts = gTTS(text=txt, lang=language)
-    tts.save(str(audio_file))
-    subprocess.Popen(["pw-play", audio_file])
+    try:
+        fp = io.BytesIO()
+        tts = gTTS(text=txt, lang=language)
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        process = subprocess.Popen(
+            ["pw-play", "-"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        process.communicate(input=fp.read())
+    except Exception as e:
+        print(f"❌ RAM Audio Playback engine failed: {e}")
+
+
+def play(txt):
+    language = "cs"
+    # 🌐 STRATEGY 1: Try High-Quality Online gTTS via RAM
+    try:
+        fp = io.BytesIO()
+        tts = gTTS(text=txt, lang=language)
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        process = subprocess.Popen(["pw-play", "-"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        process.communicate(input=fp.read())
+        return  # Success! Exit the function.
+    except Exception as network_error:
+        print(f"⚠️ Internet down or gTTS failed. Switching to local offline TTS... ({network_error})")
+        # 🔌 STRATEGY 2: Local Offline Fallback using espeak mapped directly to PipeWire
+        try:
+            # espeak parameters:
+            # -v cs (Czech voice)
+            # -v cs+f3 (Optional: switch to a smoother female variant if preferred)
+            # --stdout (Streams raw audio straight out of the process)
+            espeak_process = subprocess.Popen(
+                ["espeak", "-v", "cs+f4", language, "--stdout", txt],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL
+            )
+            # Pipe espeak's raw audio bytes directly into your active PipeWire audio speaker pool
+            pw_process = subprocess.Popen(["pw-play", "-"], stdin=espeak_process.stdout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Wait for playback to finish cleanly
+            pw_process.communicate()
+        except Exception as offline_error:
+            print(f"❌ Both online and offline voice engines failed: {offline_error}")
 
 
 def speak_and_wait(audio_file_name, wait):
@@ -64,6 +108,21 @@ def tea_timer(min, txt):
     play(f"{min} {txt} uběhlo, čaj je hotový.")  # Highly recommend creating a caj_hotov.mp3 file!
 
 
+def listen_for_loxone_sleep():
+    UDP_IP = "0.0.0.0"       # Listen on all local interfaces
+    UDP_PORT = 5005          # Choose any free custom port
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((UDP_IP, UDP_PORT))
+
+    print(f"Loxone Sleep Listener active on port {UDP_PORT}...")
+    while True:
+        data, addr = sock.recvfrom(1024)
+        if data.decode('utf-8').strip() == "sleep_ws":
+            print("Received sleep command from Loxone! Triggering suspend...")
+            os.system("echo mem | sudo tee /sys/power/state")
+
+
 if __name__ == "__main__":
     initialize_var()
     # cfg = get_config()
@@ -73,5 +132,4 @@ if __name__ == "__main__":
     # tea_timer(1)
     # beep_start()
     beep_end()
-    x = 3
-    print(f"{x:3}%")
+    play("nejkrásnější široko daleko je sluníčko")

@@ -3,11 +3,12 @@ import urllib.request
 import numpy as np
 import time
 import warnings
+import threading
 from openwakeword.model import Model
 from pvrecorder import PvRecorder
 from pathlib import Path
 from whisper import whisper, speak_and_wait
-from util import initialize_var
+from util import initialize_var, listen_for_loxone_sleep
 
 # Tell ONNX to stop looking for CUDA
 os.environ["ORT_LOGGING_LEVEL"] = "3"
@@ -50,6 +51,10 @@ def main():
     recorder = PvRecorder(frame_length=1280, device_index=-1)
     recorder.start()
 
+    # Start the Loxone UDP sleep listener in a separate thread
+    udp_thread = threading.Thread(target=listen_for_loxone_sleep, daemon=True)
+    udp_thread.start()
+
     print("\n" + "=" * 45)
     print(" >>> SYSTEM ACTIVE: ALEXA is Ready <<<")
     print("=" * 45 + "\n")
@@ -61,9 +66,11 @@ def main():
                 input_data = np.array(pcm, dtype=np.int16)
                 prediction = model.predict(input_data)
                 prob = prediction["alexa"]
-                # if prob > 0.15: print(f"Match Confidence: {prob:.4f}", end="\r")
-                # 2. Trigger point
-                if prob >= 0.80:
+                if prob >= 0.85:
+                    consecutive_matches += 1        # new adjusting sensitivity
+                else:                               # new adjusting sensitivity
+                    consecutive_matches = 0         # new Reset if it was just a random spike
+                if consecutive_matches >= 2:        # new adjusting sensitivity
                     print(f"\nDETECTED: ALEXA ({prob:.2f})")
                     whisper()
                     # NUCLEAR RESET: Re-create the model object to wipe everything

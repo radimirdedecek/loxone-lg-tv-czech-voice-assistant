@@ -4,6 +4,14 @@ Autonomní hlasový asistent navržený pro nepřetržitý provoz (24/7) v češ
 # Czech Voice Assistant for Loxone Miniserver & LG TV
 A fully offline, privacy-first Python voice assistant engineered for 24/7 local smart home deployment. This system enables direct control over Loxone Miniserver states and LG webOS Smart TVs without cloud dependencies or complex middle-layer integrations like Home Assistant. It provides granular execution mapping across any operational Loxone functional block input/output. Users can provision highly custom voice trigger phrases using natural Czech syntax, supporting multiple lexical variations mapped directly to the same hardware command array.
 
+## 🚀 Key Features & Power Management
+* **Bidirectional Loxone Power Grid:**  
+  * **Remote Start:** Wake the Workstation instantly from the Loxone App using hardware-level Wake-on-LAN (WoL) broadcasts.
+  * **Remote Sleep:** Put the Workstation into a low-power system suspend (`mem` state) directly via UDP payloads to conserve energy when the house is armed or empty.
+* **Granular Process Control:** Stop or start the background voice engine service container cleanly from your smart home dashboard interface on demand.
+* **Diskless Audio Engine:** Audio responses are synthesized entirely inside RAM using virtual binary memory buffers (`io.BytesIO`) and piped directly to PipeWire (`pw-play`), completely eliminating hard drive wear and tear.
+* **Smart Hybrid TTS (Hybrid Online/Offline):** Uses high-quality Google TTS via an active stream by default. If the home internet connection drops, the engine automatically falls back to a 100% local, offline Czech female voice (`espeak -v cs+f3`) in less than a millisecond, guaranteeing your home automation never freezes.
+
 ---
 
 ## 🛠️ System Architecture
@@ -13,6 +21,7 @@ The assistant leverages a pipeline that maximizes local hardware configurations 
 * **Wake Word Detection (`openWakeWord`):** Monitors audio streams with low CPU consumption using a specialized ONNX runtime engine.
 * **Edge Transcription Core (`faster-whisper`):** A pre-warmed Czech language model configured in INT8 execution mode directly inside workstation RAM for instantaneous voice-to-text inference.
 * **Asynchronous Command Handlers:** Background threads isolate long-running asynchronous routines (like blind travel checking and network timeouts) from the core listening thread.
+* **Loxone Block Names:** must be a single continuous string—using dots (.), underscores (_), or camelCase `!!!`
 
 ---
 
@@ -77,7 +86,16 @@ To prevent your Jabra hardware puck or audio system from dropping connection dur
     ```  
 5. To prevent default Ubuntu Server power-saving:
     ```bash
-    sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target  
+    # Unmask System Sleep States:
+    sudo systemctl unmask sleep.target suspend.target hybrid-sleep.target
+    sudo vi /etc/systemd/logind.conf
+    # uncomment this lines:
+    IdleAction=ignore
+    HandleLidSwitch=ignore
+    HandleLidSwitchExternalPower=ignore
+    # Save and exit
+    # Apply the changes instantly:
+    sudo systemctl restart systemd-logind
     ``` 
 ### Create the Automation Service on WS
 1. Create a custom systemd configuration:
@@ -90,16 +108,15 @@ To prevent your Jabra hardware puck or audio system from dropping connection dur
     After=pipewire.service wireplumber.service
     [Service]
     Type=simple
-    WorkingDirectory=/home/dr/98_loxone
+    WorkingDirectory=/home/<username>/98_loxone
     # This executes python natively straight from your virtual environment!
-    ExecStart=/home/dr/98_loxone/.venv/bin/python3 app.py
+    ExecStart=/home/<username>/98_loxone/.venv/bin/python3 app.py
     Restart=always
     RestartSec=5
     # Ensures prints show up in logs immediately instead of waiting in buffers
     Environment=PYTHONUNBUFFERED=1
     [Install]
     WantedBy=default.target
-
     # Save and exit
     ``` 
 2. Enable Autostart on Boot:
@@ -136,6 +153,14 @@ To prevent your Jabra hardware puck or audio system from dropping connection dur
     alias alexastart="systemctl --user start alexa.service"
     alias alexastop="systemctl --user stop alexa.service"
     alias alexarestart="systemctl --user restart alexa.service"
+    alias serverstart='wakeonlan 98:90:96:a1:9e:6b'
+    alias serverstop='ssh <ws_username>@<ws_ip_address> "echo mem | sudo tee /sys/power/state"'
+    alias alexash='ssh <ws_username>@<ws_ip_address>'
+    alias mount98loxone='sshfs -o reconnect,ServerAliveInterval=15 <ws_username>@<ws_ip_address>:/home/<username>/98_loxone /mnt/shared_ws'
+    alias umount98loxone='fusermount -u /mnt/shared_ws'
+
+    # flash changes:
+    source ~/.bashrc
     ``` 
 4. Switch WS to Server Mode (Headless / No Desktop)
     ```bash
@@ -155,17 +180,29 @@ To prevent your Jabra hardware puck or audio system from dropping connection dur
     # Now, restart the workstation
     sudo reboot
     ``` 
-5. Automate Hibernation (23:00 to 06:00)
+5. Automate Remote Hibernation and WOL
     ```bash
-    # Open the system's root automation schedule config:
-    sudo crontab -e
-
-    # add these two specific automation commands at the end:
-      # 1. Every night at 23:00, tell the motherboard hardware to wake up at 06:00 AM
-      0 23 * * * rtcwake -m no -t $(date -d "tomorrow 06:00" +%s)
-
-      # 2. Every night at 23:01, execute a clean system shutdown sequence
-      1 23 * * * /sbin/shutdown -h now
+    # Configure Passwordless Suspend on WS
+    sudo visudo
+    # Scroll all the way to the very bottom of the file and add this exact line:
+    <ws_username> ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/power/state
+    # Enable Wake-on-LAN on your Network Card:
+    sudo apt update && sudo apt install ethtool -y
+    # Find the WS_MAC_ADDRESS of your network card interface:
+    ip link
+    # Tell the card to listen for the Magic Packet:
+    # (Note: You will also want to ensure that "Wake on LAN" is enabled inside your physical Dell Precision BIOS settings).
+    sudo ethtool -s <WS_MAC_ADDRESS> wol g
+    # SLEEP Command sent by Loxone Virtual Output:
+    echo -n "sleep_ws" > /dev/udp/192.168.88.202/5005
+    # SLEEP Command sent from linux:
+    ssh <ws_username>@<ws_ip_address> 'ssh <ws_username>@<ws_ip_address> "echo mem | sudo tee /sys/power/state"'
+    # SLEEP Command sent from linux by UDP:
+    echo -n "sleep_ws" > /dev/udp/192.168.88.202/5005  
+    # WOL Command sent by Loxone Virtual Output:
+    wol://WS_MAC_ADDRESS
+    # WOL Command sent from linux:
+    wakeonlan WS_MAC_ADDRESS
     ``` 
 
 

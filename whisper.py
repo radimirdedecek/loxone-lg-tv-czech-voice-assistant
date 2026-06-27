@@ -11,7 +11,7 @@ from unidecode import unidecode
 from thefuzz import fuzz
 from util import speak_and_wait, play, tea_timer, beep_start, beep_end
 from lg_tv import send_lg_cmd
-from loxone import async_send_lox_cmd, is_voice_control_allowed
+from loxone import async_send_lox_cmd, is_voice_control_allowed, get_temperature
 
 # --- CONFIG ---
 WHISPER_MODEL_SIZE = "small"  # Options: 'tiny', 'base', 'small' , "medium" (small is great for Czech)
@@ -49,6 +49,10 @@ commands = {
     # LOXONE gate
     "zavři bránu": ("lox", ("brana", "pulse")),
     "otevři bránu": ("lox", ("brana", "pulse")),
+    # LOXONE temperature
+    "jak je venku": ("lox", ("venku.u.studny.teplota", "temperature")),
+    "jak je na půdě": ("lox", ("puda.rozvadec.teplota", "temperature")),
+    "jak je v ložnici": ("lox", ("loznice.tepl.", "temperature")),
     # LG TV Commands
     "zapni televizi": ("lg", "on"),
     "vypni televizi": ("lg", "off"),
@@ -62,6 +66,7 @@ commands = {
     "nastav pět minut": ("cmd", "5minut"),
     "nastav tři minuty": ("cmd", "3minuty"),
     "ale nic": ("cmd", "test"),
+    "kdo je tady nejkrásnější": ("cmd", "beautiful"),
 }
 
 print("Loading Whisper Czech Brain... (Please wait, downloading if first time)")
@@ -105,7 +110,10 @@ def run_command(command_tuple):
             return None
         targets, actions = cmd_data
         print(f"CALLING LOXONE API: {targets}/{actions}")
-        threading.Thread(target=lambda: asyncio.run(async_send_lox_cmd(targets, actions)), daemon=True).start()
+        if actions == "temperature":
+            get_temperature(targets)
+        else:
+            threading.Thread(target=lambda: asyncio.run(async_send_lox_cmd(targets, actions)), daemon=True).start()
         return "OK"
     elif system_type == "cmd":
         print(f"CALLING OTHER Commands: {cmd_data}")
@@ -119,8 +127,9 @@ def run_command(command_tuple):
                 threading.Thread(target=lambda: tea_timer(min, cmd_data[1:]), daemon=True).start()
             else:
                 speak_and_wait("error", True)
+        elif cmd_data == "beautiful":
+            play("nejkrásnější široko daleko je sluníčko")
         elif cmd_data == "test":
-            # play("ok")
             time.sleep(1)
             pass
         else:

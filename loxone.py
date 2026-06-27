@@ -2,7 +2,7 @@ import requests
 import asyncio
 import xml.etree.ElementTree as ET
 from requests.auth import HTTPBasicAuth
-from util import get_config, initialize_var
+from util import get_config, initialize_var, play
 
 
 def get_response(target, str):
@@ -42,6 +42,22 @@ def is_voice_control_allowed() -> bool:
         print(f"⚠️ Failed to read Loxone alarm state: {response.status_code}")
     except Exception as e:
         print(f"⚠️ Failed to read Loxone alarm state: {e}")
+    return False
+
+
+def get_temperature(target):
+    try:
+        response = get_response(target, "all")
+        if response.status_code == 200:
+            root = ET.fromstring(response.content)
+            block_value = root.get("value")
+            print(f"{target} {block_value}C")
+            play(f"teplota je {block_value} celsia")
+            return block_value
+        print(f"⚠️ Failed to read {target} Temperature: {response.status_code}")
+    except Exception as e:
+        print(f"⚠️ Failed to read {target} Temperature: {e}")
+    play(f"teplotu nebylo možné zjistit")
     return False
 
 
@@ -101,7 +117,7 @@ async def async_send_lox_cmd(targets, actions):
 
 if __name__ == "__main__":
     initialize_var()
-    # Test SHADING
+    # Test SHADINGll
     # send_lox_cmd("z.kuchyn", "down")
     # send_lox_cmd("z.kuchyn", "up")
     # send_lox_cmd("z.kuchyn", "shade")
@@ -120,4 +136,8 @@ if __name__ == "__main__":
 
     # Test GATE
     # asyncio.run(async_send_lox_cmd("brana", "pulse"))
-    print(is_voice_control_allowed())
+
+    # print(is_voice_control_allowed())
+    # get_temperature("venku.u.studny.teplota")
+    get_temperature("puda.rozvadec.teplota")
+    # asyncio.run(async_send_lox_cmd("venku.u.studny.teplota", "all"))
