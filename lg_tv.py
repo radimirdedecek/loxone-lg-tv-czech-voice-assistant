@@ -2,27 +2,25 @@ import json
 import os
 import time
 from pywebostv.connection import WebOSClient
-from pywebostv.controls import SystemControl, MediaControl
+from pywebostv.controls import SystemControl, MediaControl, TvControl
 from wakeonlan import send_magic_packet
-from util import get_config
+from util import get_config, initialize_var
 
 
-def send_lg_cmd(cmd):  # +,-,off,on,mute on, mute off
+def send_lg_cmd(cmd):  # +,-,off,on,mute on, mute off,1,2,3,...
     cfg = get_config()
     TOKEN_FILE = "tv_token.json"
     VOLUME_STEP = 10
     VOLUME_PAUSE = 0.5
-
     if cmd == "on":
         send_magic_packet(cfg["TV_MAC"])
         print(f"send_magic_packet to turn TV ON")
         return ["Processed successfully", "OK"]
-
     client = WebOSClient(cfg["TV_IP"])
     try:
         client.connect()
     except Exception as e:
-        # print(f"❌ Connection failed: {e}. Is the TV on?")
+        print(f"❌ Connection failed: {e}. Is the TV on?")
         return ["❌ Connection failed: {e}. Is the TV on?", None]
 
     # Load existing token or start pairing
@@ -43,6 +41,7 @@ def send_lg_cmd(cmd):  # +,-,off,on,mute on, mute off
     # CONTROL ACTIONS
     system = SystemControl(client)
     media = MediaControl(client)
+    tv = TvControl(client)
     time.sleep(0.2)
     # EXECUTION WITH RETRY LOGIC
     attempts = 3
@@ -54,6 +53,13 @@ def send_lg_cmd(cmd):  # +,-,off,on,mute on, mute off
                 media.mute(False)
             elif cmd == "off":
                 system.power_off()
+            elif cmd == "up":
+                tv.channel_up()
+            elif cmd == "down":
+                tv.channel_down()
+            elif cmd.isdigit():
+                # print(f"📺 TV Tuner: switch to channel {cmd}...")
+                tv.request("ssap://tv/openChannel", {"channelNumber": str(cmd)})
             elif cmd == "+":
                 for _ in range(VOLUME_STEP):
                     media.volume_up()
@@ -63,18 +69,23 @@ def send_lg_cmd(cmd):  # +,-,off,on,mute on, mute off
                     media.volume_down()
                     time.sleep(VOLUME_PAUSE)
 
-            # print(f"📺 TV: Command '{cmd}' processed successfully.")
+            print(f"📺 TV: Command '{cmd}' processed successfully.")
             return ["Processed successfully", "OK"]
-
         except Exception as e:
-            # print(f"⚠️ Attempt {i+1} failed: {e}. Retrying...")
+            print(f"⚠️ Attempt {i + 1} failed: {e}. Retrying...")
             time.sleep(0.5)
             continue
-
     return ["❌ Command failed after 3 attempts", None]
 
 
 if __name__ == "__main__":
-    # Testing
-    # send_lg_cmd("off")  # +,-,off,on,mute on, mute off
-    send_lg_cmd("mute on")  # +,-,off,on,mute on, mute off
+    # Testing +,-,off,on,mute on, mute off,1,2,3,...
+    initialize_var()
+    # send_lg_cmd("off")
+    # send_lg_cmd("mute on")
+    # time.sleep(0.5)
+    # send_lg_cmd("mute off")
+    # time.sleep(0.5)
+    print("1.")
+    send_lg_cmd("1")
+    print("2.")

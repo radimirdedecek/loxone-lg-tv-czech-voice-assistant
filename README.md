@@ -46,10 +46,13 @@ The assistant leverages a pipeline that maximizes local hardware configurations 
 
 ## 🚀 Installation & Prerequisites
 ### Hardware Requirements
-
-  - Linux Environment (Tested on Ubuntu/X11 profiles)
-
-  -  Recommended Microphones: Intelligent USB Far-field Microphone Arrays (e.g., Jabra Speak 410/510 series) equipped with hardware Acoustic Echo Cancellation (AEC) and Automatic Gain Control (AGC) to ensure clear pickup while TVs or music play nearby.
+  - Linux Environment (`Tested on used old PC with Ubuntu 26.04 LTS`)
+  - Recommended Microphones: Intelligent USB Far-field Microphone Arrays (e.g., Jabra Speak 410/510 series) equipped with hardware Acoustic Echo Cancellation (AEC) and Automatic Gain Control (AGC) to ensure clear pickup while TVs or music play nearby. (`Tested on used old Jabra Speak 519 model PHS002W`)
+  - Loxone Miniserver (`Tested on Loxone Miniserver V2, Firmware 17.0.3.31`)  
+  * optionally:
+    - LG TV (with webOS)
+    - Jablotron EZS with JA-121T
+    - Loxone extension RS485 
 
 ### 1. ⚙️ How to Prepare the Remote Server (WS - workstation) 
 
@@ -149,6 +152,12 @@ To prevent your Jabra hardware puck or audio system from dropping connection dur
     # Tracking the Logs Natively:
     journalctl --user -u alexa.service -f -o cat
 
+    # Displays the current state of Audio Volume:
+    wpctl status
+
+    # Set the Microphone Volume to 98%:
+    wpctl set-volume 55 0.98
+
     # usefull aliases:
     alias alexalog="journalctl --user -u alexa.service -f -o cat"
     alias alexastart="systemctl --user start alexa.service"
@@ -229,6 +238,7 @@ Run these steps via your remote connection to set up the clean, isolated Python 
     ```
 
 4. Configuration Environment:  
+    Edit `whisper.py` and update the list of commands according to your needs `commands = {...}`  
     Generate your `.env` file from the repository tracking template:
     ```bash
     cp .env.example .env
@@ -309,9 +319,12 @@ Supported configurations out-of-the-box include (which can be changed/added as d
 | Loxone Lighting   | “rozsviť noční světlo”        | `/dev/sps/io/sv.obyvak/changeTo/3` | 
 | Loxone Lighting   | “rozsviť nad stolem”          | Sub-control addressing via `/AI2/on` channels| 
 | Loxone Perimeter  | “otevři bránu”                | Virtual button state triggering via `/pulse` paths| 
+| Loxone Temperature| “jak je venku”                | Virtual button state triggering via `/temperature` paths| 
 | LG Smart TV       | “zapni / vypni televizi”      | Magic Packet broadcast or webOS system controls| 
 | LG Smart TV       | “hlasiteji / potišeji         | Dynamic incremental volume stepping frames| 
-more actions, see code...
+
+more actions, see code...  
+Edit `whisper.py` and update the list of commands according to your needs `commands = {...}` 
 
 ## 📦 Defensive Execution & Error Recovery
 

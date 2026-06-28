@@ -35,6 +35,10 @@ def download_alexa_model():
             print(f"Download failed: {e}")
 
 
+def get_time():
+    return f"{time.strftime('%d.%m.%Y %H:%M:%S')}"
+
+
 def main():
     if not util.initialize_var():
         return
@@ -54,10 +58,10 @@ def main():
     # Start the Loxone UDP sleep listener in a separate thread
     udp_thread = threading.Thread(target=util.listen_for_loxone_sleep, daemon=True)
     udp_thread.start()
-
-    print("\n" + "=" * 45)
-    print(" >>> SYSTEM ACTIVE: ALEXA is Ready <<<")
-    print("=" * 45 + "\n")
+    time.sleep(0.5)
+    print(".\n\033[1;37m" + "=" * 57)
+    print(f">>> SYSTEM ACTIVE: \033[1;33m{get_time()} \033[1;37mALEXA is Ready <<<")
+    print("=" * 57 + "\033[0m")
     speak_and_wait("posloucham", True)
     try:
         while True:
@@ -74,15 +78,14 @@ def main():
                 else:                               # new adjusting sensitivity
                     consecutive_matches = 0         # new Reset if it was just a random spike
                 if consecutive_matches >= 2:        # new adjusting sensitivity
-                    print(f"\nDETECTED: ALEXA ({prob:.2f})")
+                    print(f"DETECTED: ALEXA ({prob:.2f})")
                     whisper()
                     # NUCLEAR RESET: Re-create the model object to wipe everything
                     model = Model(wakeword_model_paths=[MODEL_PATH])
                     # time.sleep(1.0)
-                    print("\n\n\n\n\n" + "=" * 45)
-                    print(">>> System Re-initialized.")
-                    print(">>> ALEXA is Ready for next command.")
-                    print("=" * 45)
+                    print(".\n\033[1;37m" + "=" * 65)
+                    print(f">>> System Re-initialized: \033[1;33m{get_time()} \033[1;37mALEXA is Ready <<<")
+                    print("=" * 65 + "\033[0m")
             except Exception as loop_error:
                 print(f"⚠️ Internal engine hiccup: {loop_error}. Auto-recovering stack...")
                 time.sleep(2)

@@ -59,6 +59,10 @@ commands = {
     "vypni zvuk": ("lg", "mute on"),
     "hlasitěji": ("lg", "+"),
     "potišeji": ("lg", "-"),
+    "přepni na jedničku": ("lg", "1"),
+    "přepni na trojku": ("lg", "3"),
+    "přepni nahoru": ("lg", "up"),
+    "přepni dolů": ("lg", "down"),
     # OTHER Commands
     "prečti příkazy": ("cmd", "prikazy"),
     "prečti seznam": ("cmd", "prikazy"),
