@@ -8,8 +8,9 @@ A fully offline, privacy-first Python voice assistant engineered for 24/7 local 
 * **Any Loxone Function:** Universal Loxone Mapping across any functional block input/output.
 * **Any Voice Command for Function:** Map customized natural language voice commands to any hardware target.
 * **More Voice Commands for same Function:** Bind multiple voice phrases to trigger the exact same action.
-* **Fully Offline:** Operates completely local and offline for core command handling.
-* **Remote Start/Sleep from Loxone Mniserver:** Wake the workstation up (Wake-on-LAN) or trigger a system sleep to conserve energy when the house is armed or empty.
+* **Fully Offline:** Core command processing and wake-word detection operate completely locally and offline.
+* **Jablotron Security Integration:** Monitors house arming states over an RS485 serial bus via Loxone to know precisely when the home is armed or empty.
+* **Intelligent Power Management:** Wake the workstation up (Wake-on-LAN) or trigger a system sleep to conserve energy when the house is armed or empty.
 * **Remote Microphone Enable/Disable from Loxone APP:** Toggle microphone recording states (Mute/Unmute) on the fly directly inside the Loxone App.
 * **Diskless Audio Engine:** Audio responses are processed directly within RAM buffers, eliminating local storage write.
 * **Smart Hybrid TTS Backend:** Uses high-quality Google TTS by default. If the home internet connection drops, the engine automatically falls back to a 100% local, offline Czech voice.
@@ -46,13 +47,13 @@ The assistant leverages a pipeline that maximizes local hardware configurations 
 
 ## 🚀 Installation & Prerequisites
 ### Hardware Requirements
-  - Linux Environment (`Tested on used old PC with Ubuntu 26.04 LTS`)
-  - Recommended Microphones: Intelligent USB Far-field Microphone Arrays (e.g., Jabra Speak 410/510 series) equipped with hardware Acoustic Echo Cancellation (AEC) and Automatic Gain Control (AGC) to ensure clear pickup while TVs or music play nearby. (`Tested on used old Jabra Speak 519 model PHS002W`)
-  - Loxone Miniserver (`Tested on Loxone Miniserver V2, Firmware 17.0.3.31`)  
-  * optionally:
-    - LG TV (with webOS)
-    - Jablotron EZS with JA-121T
-    - Loxone extension RS485 
+  - **Computing Host:** Linux Environment running on standard x86 hardware (`Tested on x86-64 Workstation running Ubuntu 26.04 LTS`)
+  - **Audio Capture:** Intelligent USB far-field microphone arrays equipped with hardware Acoustic Echo Cancellation (AEC) and Automatic Gain Control (AGC). This ensures clear voice trigger pickup even while music or televisions are playing nearby. (`Tested on Jabra Speak 510 model PHS002W`)
+  - **Loxone Miniserver** (`Tested on Loxone Miniserver V2, Firmware 17.0.3.31`)  
+### Optional Hardware Integrations
+  - **LG Smart TV** running webOS.
+  - **Jablotron Intrusion Alarm System** equipped with a **JA-121T** RS485 communication module.
+  - **Loxone RS485 Extension** Hardware Communication Bus to parse inbound serial data frames from the Jablotron panel.
 
 ### 1. ⚙️ How to Prepare the Remote Server (WS - workstation) 
 
