@@ -74,7 +74,7 @@ commands = {
     "kdo je tady nejkrásnější": ("cmd", "beautiful"),
 }
 funny_msg = ["nejkrásnější široko daleko je sluníčko",
-             "nejkrásnější široko daleko je sluníčko boubelaté",
+             "nejkrásnější široko daleko je sluníčko a nikdo jiný",
              "nejkrásnější široko daleko je Anička, velké plyšové zvíře",
              "nejkrásnější a nejúžasnější široko daleko je budulínek a nikdo jiný"]
 

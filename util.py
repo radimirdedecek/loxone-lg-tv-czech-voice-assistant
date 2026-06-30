@@ -23,6 +23,13 @@ def initialize_var():
             print("App execution stopped to prevent crashes.")
             return False
     # print("✅ All environment variables loaded successfully.")
+    cfg = get_config()
+    lox_ip = cfg.get("LOX_IP")
+    lox_port = int(cfg.get("LOX_UDP_PORT", 5005))
+
+    # Since ALEXA_MUTED initializes as False, immediately let Loxone know the mic is live
+    send_udp_payload("mic_enabled", lox_ip, lox_port)
+    print("📢 Boot Sync: Sent initial microphone status ('mic_enabled') to Loxone.")
     return True
 
 
@@ -92,17 +99,11 @@ def tea_timer(min, txt):
 
 
 def send_udp_payload(payload_string, ip, port):
-    # Sends a raw UDP string message straight to the Loxone Miniserver
-    # 🎯 Pull your Miniserver IP and your dedicated UDP inbound port from your config
-    # (Make sure LOXONE_IP and LOXONE_UDP_PORT are defined in your config/env!)
-    # cfg = get_config()
-    # loxone_ip = cfg["LOX_IP"]
-    # loxone_port = int(cfg.get("LOX_UDP_PORT"))
+    # Sends a raw UDP string message
     try:
         # Create a standard Internet UDP socket
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             # Encode the text string to raw bytes and fire it over the network
-            # sock.sendto(payload_string.encode('utf-8'), (loxone_ip, loxone_port))
             sock.sendto(payload_string.encode('utf-8'), (ip, int(port)))
             print(f"📡 UDP Sent to ({ip}:{port}) -> '{payload_string}'")
     except Exception as e:
