@@ -7,7 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from gtts import gTTS
 
-required_vars = ["TV_IP", "TV_MAC", "LOX_IP", "LOX_USER", "LOX_PASS", "BEEP_START", "BEEP_END"]
+required_vars = ["TV_IP", "TV_MAC", "LOX_IP", "LOX_UDP_PORT", "LOX_USER", "LOX_PASS", "IP_BINDING", "SERVER_UDP_PORT", "BEEP_START", "BEEP_END"]
 ALEXA_MUTED = False
 
 
@@ -28,24 +28,6 @@ def initialize_var():
 
 def get_config():
     return {key: os.getenv(key) for key in required_vars}
-
-
-def play1(txt):
-    language = "cs"
-    try:
-        fp = io.BytesIO()
-        tts = gTTS(text=txt, lang=language)
-        tts.write_to_fp(fp)
-        fp.seek(0)
-        process = subprocess.Popen(
-            ["pw-play", "-"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        process.communicate(input=fp.read())
-    except Exception as e:
-        print(f"❌ RAM Audio Playback engine failed: {e}")
 
 
 def play(txt):
@@ -109,15 +91,35 @@ def tea_timer(min, txt):
     play(f"{min} {txt} uběhlo, čaj je hotový.")  # Highly recommend creating a caj_hotov.mp3 file!
 
 
-def listen_for_loxone_sleep():
-    UDP_IP = "0.0.0.0"       # Listen on all local interfaces
-    UDP_PORT = 5005          # Choose any free custom port
+def send_udp_payload(payload_string, ip, port):
+    # Sends a raw UDP string message straight to the Loxone Miniserver
+    # 🎯 Pull your Miniserver IP and your dedicated UDP inbound port from your config
+    # (Make sure LOXONE_IP and LOXONE_UDP_PORT are defined in your config/env!)
+    # cfg = get_config()
+    # loxone_ip = cfg["LOX_IP"]
+    # loxone_port = int(cfg.get("LOX_UDP_PORT"))
+    try:
+        # Create a standard Internet UDP socket
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            # Encode the text string to raw bytes and fire it over the network
+            # sock.sendto(payload_string.encode('utf-8'), (loxone_ip, loxone_port))
+            sock.sendto(payload_string.encode('utf-8'), (ip, int(port)))
+            print(f"📡 UDP Sent to ({ip}:{port}) -> '{payload_string}'")
+    except Exception as e:
+        print(f"❌ Failed to send UDP packet: {e}")
+
+
+def listen_for_loxone_udp():
+    cfg = get_config()
+    ip_binding = cfg.get("IP_BINDING", "0.0.0.0")        # "0.0.0.0" Listen on all local interfaces
+    server_port = int(cfg.get("SERVER_UDP_PORT"))  # Choose any free custom port
+    loxone_port = int(cfg.get("LOX_UDP_PORT"))
+    loxone_ip = cfg.get("LOX_IP")
     global ALEXA_MUTED
-
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((UDP_IP, UDP_PORT))
+    sock.bind((ip_binding, server_port))
 
-    print(f"Loxone Sleep Listener active on port {UDP_PORT}...")
+    print(f"Loxone Sleep Listener active on server port {server_port}...")
     while True:
         data, addr = sock.recvfrom(1024)
         command = data.decode('utf-8').strip()
@@ -125,23 +127,35 @@ def listen_for_loxone_sleep():
             print("Received sleep command from Loxone! Triggering suspend...")
             play("vypínám systém")
             os.system("echo mem | sudo tee /sys/power/state")
-        elif command == "stop_alexa":
+        elif command == "disable_mic":
             ALEXA_MUTED = True
+            send_udp_payload("mic_disabled", loxone_ip, loxone_port)
             print("🛑 Alexa Voice Engine MUTED")
             play("vypínám mikrofon, alexa neposlouchá příkazy")
-        elif command == "start_alexa":
+        elif command == "enable_mic":
             ALEXA_MUTED = False
             print("🟢 Alexa Voice Engine ACTIVE")
             play("mikrofon zapnut, alexa poslouchá")
+        elif command == "mic_status":
+            # Check the real variable state in memory
+            if ALEXA_MUTED:
+                # If muted, tell Loxone to reset (turn off) the mic status
+                send_udp_payload("mic_disabled", loxone_ip, loxone_port)
+            else:
+                # If unmuted, tell Loxone to set (turn on) the mic status
+                send_udp_payload("mic_enabled", loxone_ip, loxone_port)
 
 
 if __name__ == "__main__":
     initialize_var()
-    # cfg = get_config()
+    cfg = get_config()
     # print(type(cfg))
     # print(cfg["TV_MAC"])
     # print(cfg["LOX_USER"])
     # tea_timer(1)
     # beep_start()
-    beep_end()
-    play("nejkrásnější široko daleko je sluníčko")
+    # beep_end()
+    # play("nejkrásnější široko daleko je sluníčko")
+    # send_udp_payload("mic_disabled")
+    # send_udp_payload("mic_enabled")
+    send_udp_payload("mic_enabled", cfg["LOX_IP"], int(cfg.get("LOX_UDP_PORT", 5005)))

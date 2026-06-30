@@ -4,11 +4,12 @@ import asyncio
 import threading
 import re
 import socket
+import random
 from pvrecorder import PvRecorder
 from faster_whisper import WhisperModel
 from unidecode import unidecode
 from thefuzz import fuzz
-from util import speak_and_wait, play, tea_timer, beep_start, beep_end
+from util import get_config, speak_and_wait, play, tea_timer, beep_start, beep_end, send_udp_payload
 from lg_tv import send_lg_cmd
 from loxone import async_send_lox_cmd, is_voice_control_allowed, get_temperature
 
@@ -72,6 +73,10 @@ commands = {
     "vypni mikrofon": ("cmd", "mikrofon"),
     "kdo je tady nejkrásnější": ("cmd", "beautiful"),
 }
+funny_msg = ["nejkrásnější široko daleko je sluníčko",
+             "nejkrásnější široko daleko je sluníčko boubelaté",
+             "nejkrásnější široko daleko je Anička, velké plyšové zvíře",
+             "nejkrásnější a nejúžasnější široko daleko je budulínek a nikdo jiný"]
 
 print("Loading Whisper Czech Brain... (Please wait, downloading if first time)")
 whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=8)
@@ -101,6 +106,8 @@ AUTOMATED_PROMPT = generate_initial_prompt(commands)
 
 
 def run_command(command_tuple):
+    cfg = get_config()
+    server_port = int(cfg.get("SERVER_UDP_PORT"))
     if not command_tuple or not isinstance(command_tuple, tuple):
         print(f"❌ ERROR: command is not a valid tuple")
         return None
@@ -132,11 +139,10 @@ def run_command(command_tuple):
             else:
                 speak_and_wait("error", True)
         elif cmd_data == "mikrofon":
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto("stop_alexa".encode('utf-8'), ("192.168.88.202", 5005))
-            sock.close()
+            send_udp_payload("disable_mic", "127.0.0.1", server_port)
+            return "mic_disabled"
         elif cmd_data == "beautiful":
-            play("nejkrásnější široko daleko je sluníčko")
+            play(random.choice(funny_msg))
         elif cmd_data == "test":
             time.sleep(1)
             pass
@@ -249,7 +255,7 @@ def whisper():
             # time.sleep(2) xxx
             if status is None:
                 speak_and_wait("error", True)
-            else:
+            elif status is "OK":
                 speak_and_wait("hotovo", True)
     except Exception as e:
         print(f"❌ Critical failure during command processing: {e}")

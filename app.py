@@ -56,7 +56,7 @@ def main():
     recorder.start()
 
     # Start the Loxone UDP sleep listener in a separate thread
-    udp_thread = threading.Thread(target=util.listen_for_loxone_sleep, daemon=True)
+    udp_thread = threading.Thread(target=util.listen_for_loxone_udp, daemon=True)
     udp_thread.start()
     time.sleep(0.5)
     print(".\n\033[1;37m" + "=" * 57)
