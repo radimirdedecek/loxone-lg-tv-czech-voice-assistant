@@ -120,7 +120,7 @@ def listen_for_loxone_udp():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((ip_binding, server_port))
 
-    print(f"Loxone Sleep Listener active on server port {server_port}...")
+    print(f"Loxone Listener active on server port {server_port}...")
     while True:
         data, addr = sock.recvfrom(1024)
         command = data.decode('utf-8').strip()

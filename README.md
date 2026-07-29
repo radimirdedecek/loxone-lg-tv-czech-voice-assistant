@@ -4,6 +4,22 @@ Autonomní hlasový asistent navržený pro nepřetržitý provoz (24/7) v češ
 # Czech Voice Assistant for Loxone Miniserver & LG TV
 A fully offline, privacy-first Python voice assistant engineered for 24/7 local smart home deployment. This system enables direct control over Loxone Miniserver states and LG webOS Smart TVs without cloud dependencies or complex middle-layer integrations like Home Assistant. It provides granular execution mapping across any operational Loxone functional block input/output. Users can provision highly custom voice trigger phrases using natural Czech syntax, supporting multiple lexical variations mapped directly to the same hardware command array.
 
+## 📱 Interface & Real-Time Monitoring
+
+### 1. Loxone App Frontend Dashboard
+
+![Loxone Mobile App Interface](.github/assets/loxone1.png)
+
+### 2. Embedded Low-Level Automation Logic (Loxone Config)
+The automation grid uses asynchronous network pings, startup pulse initializers, and RS-Flip-Flops to store system power and microphone registration values without persistent storage reliance.
+
+![Loxone Config Schema](.github/assets/loxone2.gif)
+
+### 3. Server Initialization & Intent Parsing Logs
+The Python backend engine manages active system configuration loops, outputs colorized terminal state frames, and parses natural-language voice inputs down to explicit REST API target blocks dynamically.
+
+![Python Core Logging Output](.github/assets/terminal_log.png)
+
 ## 🚀 Key Features:
 * **Any Loxone Function:** Universal Loxone Mapping across any functional block input/output.
 * **Any Voice Command for Function:** Map customized natural language voice commands to any hardware target.
