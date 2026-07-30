@@ -10,6 +10,9 @@ from pathlib import Path
 from whisper import whisper, speak_and_wait
 import util
 
+# Testing simulated offline mode. Blocks WAN calls (gTTS, etc.) while leaving LAN (192.168.x.x / 127.0.0.1) open.
+util.set_offline_mode(False)
+
 # Tell ONNX to stop looking for CUDA
 os.environ["ORT_LOGGING_LEVEL"] = "3"
 # Silence Python warnings in the console
@@ -63,6 +66,14 @@ def main():
     print(f">>> SYSTEM ACTIVE: \033[1;33m{get_time()} \033[1;37mALEXA is Ready <<<")
     print("=" * 57 + "\033[0m")
     speak_and_wait("posloucham", True)
+    # Tune these two variables in your main loop
+    THRESHOLD = 0.82                                # changed from 0.85 -> 0.82
+    REQUIRED_CONSECUTIVE_FRAMES = 3                 # Must match 'alexa' across ~240ms of contiguous audio
+                                                    # changed from 2 -> 3
+    # 1 Frame (>= 1): Too sensitive. A quick burst of TV noise or a cough might produce a single random spike to 0.87 for 80 ms, triggering a false wake-up.
+    # 2 Frames(>= 2): Ideal. Verifies that the activation peak is real and sustained across adjacent audio chunks while you finish saying the word.
+    # 5 Frames(>= 5): Too strict. Real speech peaks fade too fast to sustain 5 consecutive
+    consecutive_matches = 0 
     try:
         while True:
             try:
@@ -73,12 +84,13 @@ def main():
                 input_data = np.array(pcm, dtype=np.int16)
                 prediction = model.predict(input_data)
                 prob = prediction["alexa"]
-                if prob >= 0.85:
+                if prob >= THRESHOLD:               # changed from 0.85 -> 0.82
                     consecutive_matches += 1        # new adjusting sensitivity
-                else:                               # new adjusting sensitivity
-                    consecutive_matches = 0         # new Reset if it was just a random spike
-                if consecutive_matches >= 2:        # new adjusting sensitivity
+                else:                               # Instead of consecutive_matches = 0, decay slowly!                           
+                    consecutive_matches = max(0, consecutive_matches - 1)     # new decay
+                if consecutive_matches >= REQUIRED_CONSECUTIVE_FRAMES:        # new adjusting sensitivity
                     print(f"DETECTED: ALEXA ({prob:.2f})")
+                    consecutive_matches = 0         # new Reset counter and trigger cloud/local transcription
                     whisper()
                     # NUCLEAR RESET: Re-create the model object to wipe everything
                     model = Model(wakeword_model_paths=[MODEL_PATH])

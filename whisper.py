@@ -3,8 +3,11 @@ import time
 import asyncio
 import threading
 import re
-import socket
 import random
+import io
+import os
+import wave
+from google.cloud import speech
 from pvrecorder import PvRecorder
 from faster_whisper import WhisperModel
 from unidecode import unidecode
@@ -73,10 +76,18 @@ commands = {
     "vypni mikrofon": ("cmd", "mikrofon"),
     "kdo je tady nejkrásnější": ("cmd", "beautiful"),
 }
-funny_msg = ["nejkrásnější široko daleko je sluníčko",
-             "nejkrásnější široko daleko je sluníčko a nikdo jiný",
-             "nejkrásnější široko daleko je Anička, velké plyšové zvíře",
-             "nejkrásnější a nejúžasnější široko daleko je budulínek a nikdo jiný"]
+# Default public fallback messages for GitHub
+FUNNY_MESSAGES = [
+    "nejkrásnější široko daleko je sluníčko",
+    "nejkrásnější na světě je přece Python code!"
+]
+
+# Override with local private messages if custom_config.py exists
+try:
+    from custom_config import FUNNY_MESSAGES, PRIVATE_COMMANDS
+    commands.update(PRIVATE_COMMANDS)
+except ImportError:
+    pass
 
 print("Loading Whisper Czech Brain... (Please wait, downloading if first time)")
 whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=8)
@@ -142,7 +153,7 @@ def run_command(command_tuple):
             send_udp_payload("disable_mic", "127.0.0.1", server_port)
             return "mic_disabled"
         elif cmd_data == "beautiful":
-            play(random.choice(funny_msg))
+            play(random.choice(FUNNY_MESSAGES))
         elif cmd_data == "test":
             time.sleep(1)
             pass
@@ -205,10 +216,47 @@ def record_command(recorder, duration=3):
     audio_array = np.array(frames, dtype=np.int16)
     return audio_array
 
+# new online voice cmd recognition
+# Converts int16 numpy array to in-memory WAV bytes and sends to GCP Speech-to-Text.
+# Returns transcribed string on success, or None on failure/offline.
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "serviceAccountKey.json"
+# print(GOOGLE_APPLICATION_CREDENTIALS)
+def transcribe_google_cloud(audio_data_int16):  
+    try:
+        # Convert numpy array into in-memory WAV file bytes
+        byte_io = io.BytesIO()
+        with wave.open(byte_io, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # 16-bit PCM
+            wf.setframerate(16000)
+            wf.writeframes(audio_data_int16.tobytes())
+        wav_bytes = byte_io.getvalue()
+
+        # Initialize Google Speech Client
+        client = speech.SpeechClient()
+        audio = speech.RecognitionAudio(content=wav_bytes)
+        config = speech.RecognitionConfig(
+            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=16000,
+            language_code="cs-CZ",
+            enable_automatic_punctuation=True,
+            model="latest_short"  # Optimized for short voice commands
+        )
+
+        # Call Google API (timeout set to 2.5s so it doesn't hang if internet drops)
+        response = client.recognize(config=config, audio=audio, timeout=2.5)
+        for result in response.results:
+            transcript = result.alternatives[0].transcript.strip()
+            if transcript:
+                print(f"☁️ [Google Cloud STT]: '{transcript}'")
+                return transcript
+    except Exception as e:
+        print(f"⚠️ Google Cloud STT unavailable or failed: {e}")
+    return None
 
 def whisper():
     if not is_voice_control_allowed():
-        # Actively ignore the wake word and loop back to listening
         return
     speak_and_wait("co_chces", True)
     recorder = PvRecorder(frame_length=1280, device_index=-1)
@@ -218,29 +266,33 @@ def whisper():
         recorder.start()
 
         # audio_file = record_command(recorder, duration=3)
-        audio_data_int16 = record_command(recorder, duration=3)               # new ✅ Passed directly as a RAM object
+        audio_data_int16 = record_command(recorder, duration=3.5)               # new ✅ Passed directly as a RAM object
         recorder.stop()  # Stop recording so CPU can focus on transcribing
         beep_end()
         print("Transcribing...")
-        audio_data_float32 = audio_data_int16.astype(np.float32) / 32768.0
-        # Transcribe using the global instance
-        segments, info = whisper_model.transcribe(
-            # audio_file,
-            audio_data_float32,   # new ✅ Passed directly as a RAM object!
-            language="cs",
-            beam_size=1,  # 1 - fast, 5 - Better accuracy for "Zavři"
-            best_of=1,  # NEW PARAM: Don't waste CPU evaluating multiple variations
-            temperature=0,  # NEW PARAM: Force direct deterministic text generation
-            # vad_parameters=dict(min_silence_duration_ms=300),  # NEW PARAM: Cut trailing silence fast
-            vad_filter=True,  # Removes silence before processing
-            word_timestamps=True,  # Faster if you don't need timing
-            initial_prompt=AUTOMATED_PROMPT
-            # initial_prompt="zavři, otevři, žaluzie, dolů, nahoru, rozsviť, zhasni, světlo, ztlum, zapni, vypni, naplno, maximum, střední, noční, obýváku, kuchyni, terasu, nad, stolem, lampičku, televizi, zvuk, bránu, hlasitěji, potišeji, prečti, seznam, nastav, tři, pět, minut, ale, nic",
-        )
-        # beep_end()
-        # segments, _ = whisper.transcribe(audio_file, language="cs")
-        full_text = "".join([s.text for s in segments])
-
+        # 🌐 FORK STEP 1: Try Online Google Cloud STT First
+        full_text = ""
+        full_text = transcribe_google_cloud(audio_data_int16)
+        if not full_text:
+            print("🏠 [Local Whisper]: Transcribing locally...")
+            audio_data_float32 = audio_data_int16.astype(np.float32) / 32768.0
+            segments, info = whisper_model.transcribe(
+                # audio_file,
+                audio_data_float32,    # new ✅ Passed directly as a RAM object!
+                language="cs",
+                beam_size=1,           # 1 - fast, 5 - Better accuracy for "Zavři"
+                best_of=1,             # NEW PARAM: Don't waste CPU evaluating multiple variations
+                temperature=0,         # NEW PARAM: Force direct deterministic text generation
+                # vad_parameters=dict(min_silence_duration_ms=300),  # NEW PARAM: Cut trailing silence fast
+                vad_filter=True,       # Removes silence before processing
+                word_timestamps=True,  # Faster if you don't need timing
+                initial_prompt=AUTOMATED_PROMPT
+                # initial_prompt="zavři, otevři, žaluzie, dolů, nahoru, rozsviť, zhasni, světlo, ztlum, zapni, vypni, naplno, maximum, střední, noční, obýváku, kuchyni, terasu, nad, stolem, lampičku, televizi, zvuk, bránu, hlasitěji, potišeji, prečti, seznam, nastav, tři, pět, minut, ale, nic",
+            )
+            # beep_end()
+            # segments, _ = whisper.transcribe(audio_file, language="cs")
+            full_text = "".join([s.text for s in segments])
+        print(f"🎙️ Final Recognized Text: '{full_text}'")
         # 3. Process
         # print("Processing...")
         msg_text, cmd_tuple = process_smart_home_intent(full_text)
@@ -255,7 +307,7 @@ def whisper():
             # time.sleep(2) xxx
             if status is None:
                 speak_and_wait("error", True)
-            elif status is "OK":
+            elif status == "OK":
                 speak_and_wait("hotovo", True)
     except Exception as e:
         print(f"❌ Critical failure during command processing: {e}")
@@ -270,11 +322,7 @@ if __name__ == "__main__":
     # [target_phrase, cmd] = process_smart_home_intent("avri branu")
     # [target_phrase, cmd] = process_smart_home_intent("Zauři šeluzie")
     # run_command(("cmd", "5minut"))
-
-    # for txt in commands:
-    #     play(txt)
-    #     time.sleep(3)
-
+   
     cmd_data = "3minuty"
     print(cmd_data[1:6])
     print("\u2714")

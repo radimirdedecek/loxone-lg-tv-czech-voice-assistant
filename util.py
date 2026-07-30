@@ -57,7 +57,7 @@ def play(txt):
             # -v cs+f3 (Optional: switch to a smoother female variant if preferred)
             # --stdout (Streams raw audio straight out of the process)
             espeak_process = subprocess.Popen(
-                ["espeak", "-v", "cs+f4", language, "--stdout", txt],
+                ["espeak-ng", "-v", "cs+f4", "--stdout", txt],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL
             )
@@ -75,6 +75,11 @@ def speak_and_wait(audio_file_name, wait):
     if not audio_file_name.endswith(".mp3"):
         audio_file_name += ".mp3"
     audio_file = BASE_DIR / "messages" / audio_file_name
+    error_file = BASE_DIR / "messages" / "error.mp3"
+    if not audio_file.exists():
+        print(f"⚠️ Audio file missing: '{audio_file}'. Playing 'error.mp3' fallback...")
+        subprocess.Popen(["pw-play", error_file])
+        return
     if wait:
         subprocess.run(["pw-play", str(audio_file)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
@@ -95,7 +100,7 @@ def tea_timer(min, txt):
     print(f"⏱️ Tea timer started in background for {min} minutes...")
     time.sleep(min * 60)
     print("🔔 Tea timer finished!")
-    play(f"{min} {txt} uběhlo, čaj je hotový.")  # Highly recommend creating a caj_hotov.mp3 file!
+    speak_and_wait("caj_je_hotovy", True)
 
 
 def send_udp_payload(payload_string, ip, port):
@@ -126,17 +131,17 @@ def listen_for_loxone_udp():
         command = data.decode('utf-8').strip()
         if command == "sleep_ws":
             print("Received sleep command from Loxone! Triggering suspend...")
-            play("vypínám systém")
+            speak_and_wait("vypinam_system", True)
             os.system("echo mem | sudo tee /sys/power/state")
         elif command == "disable_mic":
             ALEXA_MUTED = True
             send_udp_payload("mic_disabled", loxone_ip, loxone_port)
             print("🛑 Alexa Voice Engine MUTED")
-            play("vypínám mikrofon, alexa neposlouchá příkazy")
+            speak_and_wait("mikrofon_vypnut", True)
         elif command == "enable_mic":
             ALEXA_MUTED = False
             print("🟢 Alexa Voice Engine ACTIVE")
-            play("mikrofon zapnut, alexa poslouchá")
+            speak_and_wait("mikrofon_zapnut", True)
         elif command == "mic_status":
             # Check the real variable state in memory
             if ALEXA_MUTED:
@@ -146,6 +151,29 @@ def listen_for_loxone_udp():
                 # If unmuted, tell Loxone to set (turn on) the mic status
                 send_udp_payload("mic_enabled", loxone_ip, loxone_port)
 
+_ORIG_CONNECT = socket.socket.connect
+def set_offline_mode(enabled=True):
+    """
+    Toggles simulated offline mode for the current Python process.
+    - enabled=True : Blocks WAN calls (gTTS, etc.) while leaving LAN (192.168.x.x / 127.0.0.1) open.
+    - enabled=False: Restores full internet access.
+    """
+    if not enabled:
+        socket.socket.connect = _ORIG_CONNECT
+        # print("🌐 Offline simulator: OFF (Normal internet access restored)")
+        return
+    def guarded_connect(self, address):
+        host = address[0]
+        # Allow local connections (LAN and Localhost)
+        if host.startswith("192.168.") or host.startswith("127.") or host == "localhost":
+            return _ORIG_CONNECT(self, address)
+        # Block any external IP/domain (simulates no internet for gTTS/cloud APIs)
+        raise socket.error("[Simulated WAN Block] Network interface offline")
+    socket.socket.connect = guarded_connect
+    print("\n")
+    print(67 * "#")
+    print("###  🌐 Offline simulator: ON (External WAN calls are blocked)  ###")
+    print(67 * "#","\n")
 
 if __name__ == "__main__":
     initialize_var()
@@ -156,7 +184,9 @@ if __name__ == "__main__":
     # tea_timer(1)
     # beep_start()
     # beep_end()
-    # play("nejkrásnější široko daleko je sluníčko")
     # send_udp_payload("mic_disabled")
     # send_udp_payload("mic_enabled")
-    send_udp_payload("mic_enabled", cfg["LOX_IP"], int(cfg.get("LOX_UDP_PORT", 5005)))
+    # import util
+    # util.set_offline_mode(True)
+    # send_udp_payload("mic_enabled", cfg["LOX_IP"], int(cfg.get("LOX_UDP_PORT", 5005)))
+    tea_timer(3, "minuty")

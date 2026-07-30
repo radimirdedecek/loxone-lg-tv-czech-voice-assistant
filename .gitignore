@@ -7,12 +7,15 @@ venv/
 ENV/
 .env
 tts_google_api.py
+custom_config.py
 command.wav
 output.mp3
+alexacp.sh
 
 # Secrets & Configs
 *.secret
 tv_token.json
+serviceAccountKey.json
 
 # IDEs
 .vscode/

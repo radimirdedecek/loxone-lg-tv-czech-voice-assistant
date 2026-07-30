@@ -1,3 +1,4 @@
+google-cloud-speech==2.40.0
 faster_whisper==1.2.1
 pvrecorder==1.2.4
 numpy==2.5.0
@@ -10,6 +11,7 @@ pywebostv==0.8.9
 thefuzz==0.22.1
 Unidecode==1.4.0
 
+# google-cloud-texttospeech==2.37.0
 # attr==0.3.2
 # backports.statistics==0.1.0
 # cryptography==49.0.0

@@ -29,7 +29,7 @@ The Python backend engine manages active system configuration loops, outputs col
 * **Intelligent Power Management:** Wake the workstation up (Wake-on-LAN) or trigger a system sleep to conserve energy when the house is armed or empty.
 * **Remote Microphone Enable/Disable from Loxone APP:** Toggle microphone recording states (Mute/Unmute) on the fly directly inside the Loxone App.
 * **Diskless Audio Engine:** Audio responses are processed directly within RAM buffers, eliminating local storage write.
-* **Smart Hybrid TTS Backend:** Uses high-quality Google TTS by default. If the home internet connection drops, the engine automatically falls back to a 100% local, offline Czech voice.
+* **Smart Hybrid TTS Backend:** Uses high-quality online Google TTS (`gTTS`) via RAM buffers by default. If the home internet connection drops, the engine automatically falls back to a 100% local, offline Czech voice using `espeak-ng` piped directly through `pw-play` (PipeWire).
 ---
 
 ## 🛠️ System Architecture
@@ -236,10 +236,10 @@ To prevent your Jabra hardware puck or audio system from dropping connection dur
 ### 2. 📦 How to Install Necessary Files and SW on WS
 
 Run these steps via your remote connection to set up the clean, isolated Python Virtual Environment:
-1. Install the core OpenSSH server and python tools:
+1. Install the core OpenSSH server, Python tools, offline TTS engine, and audio playback utilities:
     ```bash
     sudo apt update
-    sudo apt install openssh-server python3-venv -y
+    sudo apt install openssh-server python3-venv espeak-ng pipewire-utils -y
     ```
 
 2. Navigate to your project folder (`~/98_loxone`) and build the environment:

@@ -2,7 +2,7 @@ import requests
 import asyncio
 import xml.etree.ElementTree as ET
 from requests.auth import HTTPBasicAuth
-from util import get_config, initialize_var, play
+from util import get_config, initialize_var, play, speak_and_wait
 
 
 def get_response(target, str):
@@ -57,7 +57,7 @@ def get_temperature(target):
         print(f"⚠️ Failed to read {target} Temperature: {response.status_code}")
     except Exception as e:
         print(f"⚠️ Failed to read {target} Temperature: {e}")
-    play(f"teplotu nebylo možné zjistit")
+    speak_and_wait("teplotu_nebylo_mozne_zjistit", True)
     return False
 
 
@@ -139,5 +139,6 @@ if __name__ == "__main__":
 
     # print(is_voice_control_allowed())
     # get_temperature("venku.u.studny.teplota")
-    get_temperature("puda.rozvadec.teplota")
+    # get_temperature("puda.rozvadec.teplota")
     # asyncio.run(async_send_lox_cmd("venku.u.studny.teplota", "all"))
+    # play(f"teplota je 33,6° celsia")
