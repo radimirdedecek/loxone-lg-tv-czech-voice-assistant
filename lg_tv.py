@@ -15,13 +15,13 @@ def send_lg_cmd(cmd):  # +,-,off,on,mute on, mute off,1,2,3,...
     if cmd == "on":
         send_magic_packet(cfg["TV_MAC"])
         print(f"send_magic_packet to turn TV ON")
-        return ["Processed successfully", "OK"]
+        return "OK"
     client = WebOSClient(cfg["TV_IP"])
     try:
         client.connect()
     except Exception as e:
         print(f"❌ Connection failed: {e}. Is the TV on?")
-        return ["❌ Connection failed: {e}. Is the TV on?", None]
+        return None
 
     # Load existing token or start pairing
     store = {}
@@ -70,12 +70,13 @@ def send_lg_cmd(cmd):  # +,-,off,on,mute on, mute off,1,2,3,...
                     time.sleep(VOLUME_PAUSE)
 
             print(f"📺 TV: Command '{cmd}' processed successfully.")
-            return ["Processed successfully", "OK"]
+            return "OK"
         except Exception as e:
             print(f"⚠️ Attempt {i + 1} failed: {e}. Retrying...")
             time.sleep(0.5)
             continue
-    return ["❌ Command failed after 3 attempts", None]
+    print("❌ Command failed after 3 attempts", None)
+    return None
 
 
 if __name__ == "__main__":

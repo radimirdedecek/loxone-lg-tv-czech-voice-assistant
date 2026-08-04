@@ -67,8 +67,20 @@ async def async_send_lox_cmd(targets, actions):
     action_list = actions.split()
     # print(targets + actions)
     if "down" in action_list and "shade" in action_list:
-        # 1. Start the movement
         for target in target_list:
+            initial_pos = get_blind_position(target)
+            print(f"📊 Initial {target} Position: {initial_pos}")
+            # CASE A: Blinds are already fully down/closed (Position == 1.0)
+            if initial_pos is not None and initial_pos >= 1.0:
+                print(f"➡️ {target} is already down (1.000). Sending direct 'shade' command...")
+                try:
+                    get_response(target, "shade")
+                    print(f"🌗 {target} is now shaded (tilted).")
+                except Exception as e:
+                    print(f"❌ Shading command failed for {target}: {e}")
+                continue
+            
+            # CASE B: Blinds are open or partially up (< 1.0)
             try:
                 response = get_response(target, "down")
                 if response.status_code == 200:
@@ -119,10 +131,10 @@ if __name__ == "__main__":
     initialize_var()
     # Test SHADINGll
     # send_lox_cmd("z.kuchyn", "down")
-    # send_lox_cmd("z.kuchyn", "up")
     # send_lox_cmd("z.kuchyn", "shade")
     # send_lox_cmd("z.kuchyn z.obyvak z.terasa", "down shade")
-    # asyncio.run(async_send_lox_cmd("z.obyvak", "down shade"))
+    asyncio.run(async_send_lox_cmd("z.kuchyn", "down shade"))
+    # "otevři žaluzie v kuch      ("z.kuchyn", "down shade")),
     # asyncio.run(async_send_lox_cmd("z.kuchyn z.obyvak z.terasa", "down shade"))
     # asyncio.run(async_send_lox_cmd("z.kuchyn z.obyvak z.terasa", "up"))
     # print(get_blind_position("z.obyvak"))
@@ -141,4 +153,3 @@ if __name__ == "__main__":
     # get_temperature("venku.u.studny.teplota")
     # get_temperature("puda.rozvadec.teplota")
     # asyncio.run(async_send_lox_cmd("venku.u.studny.teplota", "all"))
-    # play(f"teplota je 33,6° celsia")

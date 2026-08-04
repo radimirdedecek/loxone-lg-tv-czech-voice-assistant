@@ -12,8 +12,9 @@ from pvrecorder import PvRecorder
 from faster_whisper import WhisperModel
 from unidecode import unidecode
 from thefuzz import fuzz
-from util import get_config, speak_and_wait, play, tea_timer, beep_start, beep_end, send_udp_payload
+from util import get_config, speak_and_wait, play, tea_timer, beep_start, beep_end, send_udp_payload, initialize_var
 from lg_tv import send_lg_cmd
+from wiim_amp import send_wiim_cmd
 from loxone import async_send_lox_cmd, is_voice_control_allowed, get_temperature
 
 # --- CONFIG ---
@@ -67,6 +68,11 @@ commands = {
     "přepni na trojku": ("lg", "3"),
     "přepni nahoru": ("lg", "up"),
     "přepni dolů": ("lg", "down"),
+    # WIIM AMP PLAYER Commands
+    "zapni hudbu": ("wiim", "1"),
+    "zapni přehrávač": ("wiim", 1),
+    "vypni hudbu": ("wiim", "stop"),
+    "vypni přehrávač": ("wiim", "stop"),
     # OTHER Commands
     "prečti příkazy": ("cmd", "prikazy"),
     "prečti seznam": ("cmd", "prikazy"),
@@ -137,6 +143,9 @@ def run_command(command_tuple):
         else:
             threading.Thread(target=lambda: asyncio.run(async_send_lox_cmd(targets, actions)), daemon=True).start()
         return "OK"
+    if system_type == "wiim":
+        print(f"CALLING WIIM AMP PLAYER API: {cmd_data}")
+        return send_wiim_cmd(cmd_data)
     elif system_type == "cmd":
         print(f"CALLING OTHER Commands: {cmd_data}")
         if cmd_data == "prikazy":
@@ -319,11 +328,12 @@ def whisper():
 
 if __name__ == "__main__":
     # --- TEST ---
+    initialize_var()
     # [target_phrase, cmd] = process_smart_home_intent("avri branu")
     # [target_phrase, cmd] = process_smart_home_intent("Zauři šeluzie")
     # run_command(("cmd", "5minut"))
+    # run_command(command_tuple)
+    # "otevři žaluzie v kuchyni": ("lox", ("z.kuchyn", "down shade")),
+    run_command(("lox", ("z.kuchyn", "down shade")))
    
-    cmd_data = "3minuty"
-    print(cmd_data[1:6])
-    print("\u2714")
-    print(3 + int(cmd_data[0]))
+

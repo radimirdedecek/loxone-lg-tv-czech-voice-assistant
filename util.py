@@ -7,7 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from gtts import gTTS
 
-required_vars = ["TV_IP", "TV_MAC", "LOX_IP", "LOX_UDP_PORT", "LOX_USER", "LOX_PASS", "IP_BINDING", "SERVER_UDP_PORT", "BEEP_START", "BEEP_END"]
+required_vars = ["WIIM_IP", "TV_IP", "TV_MAC", "LOX_IP", "LOX_UDP_PORT", "LOX_USER", "LOX_PASS", "IP_BINDING", "SERVER_UDP_PORT", "BEEP_START", "BEEP_END"]
 ALEXA_MUTED = False
 
 
