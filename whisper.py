@@ -8,11 +8,11 @@ import io
 import os
 import wave
 from google.cloud import speech
-from pvrecorder import PvRecorder
+# from pvrecorder import PvRecorder
 from faster_whisper import WhisperModel
 from unidecode import unidecode
 from thefuzz import fuzz
-from util import get_config, speak_and_wait, play, tea_timer, beep_start, beep_end, send_udp_payload, initialize_var
+from util import get_config, speak_and_wait, play, tea_timer, beep_start, beep_end, send_udp_payload, initialize_var, create_pvrecorder
 from lg_tv import send_lg_cmd
 from wiim_amp import send_wiim_cmd
 from loxone import async_send_lox_cmd, is_voice_control_allowed, get_temperature
@@ -24,12 +24,9 @@ commands = {
     "zavři žaluzie v kuchyni": ("lox", ("z.kuchyn", "down")),
     "zavři žaluzie v obýváku": ("lox", ("z.obyvak", "down")),
     "zavři žaluzie na terasu": ("lox", ("z.terasa", "down")),
-    "dej žaluzie v kuchyni dolů": ("lox", ("z.kuchyn", "down")),
-    "dej žaluzie v obýváku dolů": ("lox", ("z.obyvak", "down")),
-    "dej žaluzie na terasu dolů": ("lox", ("z.terasa", "down")),
-    "dej žaluzie v kuchyni nahoru": ("lox", ("z.kuchyn", "up")),
-    "dej žaluzie v obýváku nahoru": ("lox", ("z.obyvak", "up")),
-    "dej žaluzie na terasu nahoru": ("lox", ("z.terasa", "up")),
+    "žaluzie v kuchyni nahoru": ("lox", ("z.kuchyn", "up")),
+    "žaluzie v obýváku nahoru": ("lox", ("z.obyvak", "up")),
+    "žaluzie na terasu nahoru": ("lox", ("z.terasa", "up")),
     "zavři žaluzie": ("lox", ("z.kuchyn z.obyvak z.terasa", "down")),
     "otevři žaluzie v kuchyni": ("lox", ("z.kuchyn", "down shade")),
     "otevři žaluzie v obýváku": ("lox", ("z.obyvak", "down shade")),
@@ -268,7 +265,7 @@ def whisper():
     if not is_voice_control_allowed():
         return
     speak_and_wait("co_chces", True)
-    recorder = PvRecorder(frame_length=1280, device_index=-1)
+    recorder = create_pvrecorder(frame_length=1280) # openWakeWord uses 1280 (80ms)
     try:
         beep_start()
         print("Whisper Ready! Now recording...")
@@ -313,7 +310,7 @@ def whisper():
             # print(f"🟢 Matched: {cmd_tuple} -> {cmd_tuple}")
             speak_and_wait("jasne", False)
             status = run_command(cmd_tuple)
-            # time.sleep(2) xxx
+            # time.sleep(2) 
             if status is None:
                 speak_and_wait("error", True)
             elif status == "OK":

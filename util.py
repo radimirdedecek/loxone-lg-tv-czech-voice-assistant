@@ -6,10 +6,67 @@ import socket
 from pathlib import Path
 from dotenv import load_dotenv
 from gtts import gTTS
+from pvrecorder import PvRecorder
 
 required_vars = ["WIIM_IP", "TV_IP", "TV_MAC", "LOX_IP", "LOX_UDP_PORT", "LOX_USER", "LOX_PASS", "IP_BINDING", "SERVER_UDP_PORT", "BEEP_START", "BEEP_END"]
 ALEXA_MUTED = False
 
+# Checks if Jabra is explicitly requested via environment variable.
+def is_jabra_requested() -> bool:
+    return os.getenv("ALEXA_USE_JABRA", "0").lower() in ("1", "true", "yes")
+
+import subprocess
+import os
+
+# Dynamically finds the PulseAudio/PipeWire sink name for the Jabra speaker.
+def get_jabra_sink_name(sink_name) -> str | None:
+    try:
+        result = subprocess.run(
+            ["pactl", "list", "short", "sinks"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        for line in result.stdout.splitlines():
+            if "jabra" in line.lower():
+                # pactl output format: ID <sink_name> driver sample_spec state
+                parts = line.split()
+                if len(parts) >= 2:
+                    return parts[1]
+    except Exception as e:
+        print(f"⚠️ Error finding Jabra sink via pactl: {e}")
+    return sink_name
+
+# Configures audio output sink for TTS / audio clips.
+def setup_audio_output(JABRA_SINK_NAME):
+    if is_jabra_requested():
+        print("🔊 Output Mode: Dedicated Jabra Speaker")
+        os.environ["PIPEWIRE_NODE"] = JABRA_SINK_NAME
+        os.environ["PULSE_SINK"] = JABRA_SINK_NAME
+    else:
+        print("🔊 Output Mode: System Default Speaker")
+        # Clear environment overrides so audio plays via default system device
+        os.environ.pop("PIPEWIRE_NODE", None)
+        os.environ.pop("PULSE_SINK", None)
+        
+# Creates PvRecorder instance automatically choosing between Jabra and Default mic.
+def create_pvrecorder(frame_length=512): # frame_length=1280 samples = 80ms chunks
+    mic_index = -1
+    if is_jabra_requested():
+        jabra_idx = mic_index
+        devices = PvRecorder.get_available_devices()
+        for index, device_name in enumerate(devices):
+            name_lower = device_name.lower()
+            if "jabra" in name_lower and "monitor" not in name_lower:
+                jabra_idx = index
+        if jabra_idx != mic_index:
+            print(f"🎙️ Input Mode: Jabra physical mic (Index [{jabra_idx}])")
+            mic_index = jabra_idx
+        else:
+            print("⚠️ Jabra requested but not found! Falling back to Default Mic.")
+    else:
+        print("🎙️ Input Mode: System Default Microphone")
+    return PvRecorder(device_index=mic_index, frame_length=frame_length)
 
 def initialize_var():
     print("Initializing env variables...")
@@ -178,6 +235,7 @@ def set_offline_mode(enabled=True):
 if __name__ == "__main__":
     initialize_var()
     cfg = get_config()
+    
     # print(type(cfg))
     # print(cfg["TV_MAC"])
     # print(cfg["LOX_USER"])
@@ -189,4 +247,6 @@ if __name__ == "__main__":
     # import util
     # util.set_offline_mode(True)
     # send_udp_payload("mic_enabled", cfg["LOX_IP"], int(cfg.get("LOX_UDP_PORT", 5005)))
-    tea_timer(3, "minuty")
+    # tea_timer(3, "minuty")
+    # print(get_jabra_device_index())
+    # recorder = create_pvrecorder(frame_length=1280) # openWakeWord uses 1280 (80ms)

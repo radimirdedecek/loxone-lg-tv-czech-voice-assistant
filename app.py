@@ -13,6 +13,9 @@ import util
 # Testing simulated offline mode. Blocks WAN calls (gTTS, etc.) while leaving LAN (192.168.x.x / 127.0.0.1) open.
 util.set_offline_mode(False)
 
+# Testing simulated start alexa.service mode = 1, manual start = 0
+os.environ["ALEXA_USE_JABRA"] = "0" 
+
 # Tell ONNX to stop looking for CUDA
 os.environ["ORT_LOGGING_LEVEL"] = "3"
 # Silence Python warnings in the console
@@ -23,7 +26,9 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "oww_models"
 MODEL_DIR.mkdir(exist_ok=True)
 MODEL_PATH = str(MODEL_DIR / "alexa.onnx")
-
+JABRA_SINK_NAME = "alsa_output.usb-0b0e_Jabra_SPEAK_510_USB_501AA5210F8A020A00-00.analog-stereo"
+JABRA_SINK_NAME = util.get_jabra_sink_name(JABRA_SINK_NAME)
+util.setup_audio_output(JABRA_SINK_NAME)
 
 def download_alexa_model():
     url = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx"
@@ -54,8 +59,7 @@ def main():
     print("Initializing openWakeWord...")
     model = Model(wakeword_model_paths=[MODEL_PATH])
 
-    # pvrecorder: 1280 samples = 80ms chunks
-    recorder = PvRecorder(frame_length=1280, device_index=-1)
+    recorder = util.create_pvrecorder(frame_length=1280) # 1280 samples = 80ms chunks
     recorder.start()
 
     # Start the Loxone UDP sleep listener in a separate thread
