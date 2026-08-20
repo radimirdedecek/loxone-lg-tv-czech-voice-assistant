@@ -8,7 +8,6 @@ import io
 import os
 import wave
 from google.cloud import speech
-# from pvrecorder import PvRecorder
 from faster_whisper import WhisperModel
 from unidecode import unidecode
 from thefuzz import fuzz
@@ -230,6 +229,11 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "serviceAccountKey.json"
 # print(GOOGLE_APPLICATION_CREDENTIALS)
 def transcribe_google_cloud(audio_data_int16):  
     try:
+        # Guard against empty audio buffers
+        if audio_data_int16 is None or len(audio_data_int16) == 0:
+            print("⚠️ [Google Cloud STT]: Empty audio buffer received.")
+            return None
+        
         # Convert numpy array into in-memory WAV file bytes
         byte_io = io.BytesIO()
         with wave.open(byte_io, "wb") as wf:
@@ -242,26 +246,33 @@ def transcribe_google_cloud(audio_data_int16):
         # Initialize Google Speech Client
         client = speech.SpeechClient()
         audio = speech.RecognitionAudio(content=wav_bytes)
+        
+        # FIXED: Removed model="latest_short" (not supported for cs-CZ in v1 API)
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
             language_code="cs-CZ",
-            enable_automatic_punctuation=True,
-            model="latest_short"  # Optimized for short voice commands
+            enable_automatic_punctuation=True
         )
-
-        # Call Google API (timeout set to 2.5s so it doesn't hang if internet drops)
-        response = client.recognize(config=config, audio=audio, timeout=2.5)
+        # Call Google API with 3.0s timeout
+        response = client.recognize(config=config, audio=audio, timeout=3.0)
+        
         for result in response.results:
-            transcript = result.alternatives[0].transcript.strip()
-            if transcript:
-                print(f"☁️ [Google Cloud STT]: '{transcript}'")
-                return transcript
+            if result.alternatives:
+                transcript = result.alternatives[0].transcript.strip()
+                if transcript:
+                    print(f"☁️ [Google Cloud STT]: '{transcript}'")
+                    return transcript
+        print("☁️ [Google Cloud STT]: Audio processed, but no words were recognized.")
+
     except Exception as e:
         print(f"⚠️ Google Cloud STT unavailable or failed: {e}")
+        # Print detailed traceback for quick debugging:
+        import traceback
+        traceback.print_exc()
     return None
 
-def whisper():
+def whisper(use_cloud: bool | None = None):
     if not is_voice_control_allowed():
         return
     speak_and_wait("co_chces", True)
@@ -278,7 +289,7 @@ def whisper():
         print("Transcribing...")
         # 🌐 FORK STEP 1: Try Online Google Cloud STT First
         full_text = ""
-        full_text = transcribe_google_cloud(audio_data_int16)
+        if use_cloud: full_text = transcribe_google_cloud(audio_data_int16)
         if not full_text:
             print("🏠 [Local Whisper]: Transcribing locally...")
             audio_data_float32 = audio_data_int16.astype(np.float32) / 32768.0

@@ -11,6 +11,37 @@ from pvrecorder import PvRecorder
 required_vars = ["WIIM_IP", "TV_IP", "TV_MAC", "LOX_IP", "LOX_UDP_PORT", "LOX_USER", "LOX_PASS", "IP_BINDING", "SERVER_UDP_PORT", "BEEP_START", "BEEP_END"]
 ALEXA_MUTED = False
 
+def check_udp_port_available() -> bool:
+    """Verifies that the server UDP port is free before starting another instance."""
+    cfg = get_config()
+    ip_binding = cfg.get("IP_BINDING", "0.0.0.0")
+    server_port = int(cfg.get("SERVER_UDP_PORT", 5005))
+    
+    test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        test_sock.bind((ip_binding, server_port))
+        test_sock.close()
+        return True
+    except OSError as e:
+        test_sock.close()
+        if e.errno == 98:  # Address already in use
+            print("\n" + "=" * 65)
+            print("❌ CANNOT START APP: ANOTHER INSTANCE IS ALREADY RUNNING!")
+            print(f"👉 Port {server_port} is bound by 'alexa.service' or another process.")
+            print("👉 Stop the background systemd service first before testing in VSCode:")
+            print("   sudo systemctl stop alexa.service")
+            print("=" * 65 + "\n")
+            return False
+        raise e
+
+# Fast, non-blocking check to verify WAN connectivity.
+def is_online(host="8.8.8.8", port=53, timeout=0.4) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+    
 # Parses /proc/asound/cards to find the dynamic integer card index for Jabra.
 def get_jabra_alsa_card() -> str:
     try:
@@ -146,6 +177,10 @@ def initialize_var():
             print(f"❌ CRITICAL ERROR: .env file is missing variable '{var_name}'!")
             print("App execution stopped to prevent crashes.")
             return False
+    # Single-instance check: Exit early if background service is active
+    if not check_udp_port_available():
+        return False
+    
     # print("✅ All environment variables loaded successfully.")
     cfg = get_config()
     lox_ip = cfg.get("LOX_IP")
