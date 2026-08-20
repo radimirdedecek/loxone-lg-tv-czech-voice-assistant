@@ -9,7 +9,7 @@ ENV/
 tts_google_api.py
 custom_config.py
 command.wav
-output.mp3
+*.mp3
 alexacp.sh
 
 # Secrets & Configs

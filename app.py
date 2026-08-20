@@ -5,7 +5,6 @@ import time
 import warnings
 import threading
 from openwakeword.model import Model
-from pvrecorder import PvRecorder
 from pathlib import Path
 from whisper import whisper, speak_and_wait
 import util
@@ -14,7 +13,7 @@ import util
 util.set_offline_mode(False)
 
 # Testing simulated start alexa.service mode = 1, manual start = 0
-os.environ["ALEXA_USE_JABRA"] = "0" 
+# os.environ["ALEXA_USE_JABRA"] = "1" 
 
 # Tell ONNX to stop looking for CUDA
 os.environ["ORT_LOGGING_LEVEL"] = "3"
@@ -26,9 +25,8 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "oww_models"
 MODEL_DIR.mkdir(exist_ok=True)
 MODEL_PATH = str(MODEL_DIR / "alexa.onnx")
-JABRA_SINK_NAME = "alsa_output.usb-0b0e_Jabra_SPEAK_510_USB_501AA5210F8A020A00-00.analog-stereo"
-JABRA_SINK_NAME = util.get_jabra_sink_name(JABRA_SINK_NAME)
-util.setup_audio_output(JABRA_SINK_NAME)
+MAX_CONSECUTIVE_ERRORS = 5
+util.setup_audio_output()
 
 def download_alexa_model():
     url = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx"
@@ -77,11 +75,15 @@ def main():
     # 1 Frame (>= 1): Too sensitive. A quick burst of TV noise or a cough might produce a single random spike to 0.87 for 80 ms, triggering a false wake-up.
     # 2 Frames(>= 2): Ideal. Verifies that the activation peak is real and sustained across adjacent audio chunks while you finish saying the word.
     # 5 Frames(>= 5): Too strict. Real speech peaks fade too fast to sustain 5 consecutive
+    consecutive_errors = 0
     consecutive_matches = 0 
     try:
         while True:
             try:
                 pcm = recorder.read()
+                # Reset error counter on successful read
+                if pcm:
+                    consecutive_errors = 0
                 if util.ALEXA_MUTED:
                     time.sleep(0.5)
                     continue  # Skip processing entirely if Loxone turned us off!
@@ -102,10 +104,38 @@ def main():
                     print(".\n\033[1;37m" + "=" * 65)
                     print(f">>> System Re-initialized: \033[1;33m{get_time()} \033[1;37mALEXA is Ready <<<")
                     print("=" * 65 + "\033[0m")
-            except Exception as loop_error:
-                print(f"⚠️ Internal engine hiccup: {loop_error}. Auto-recovering stack...")
-                time.sleep(2)
-                continue  # Keeps the loop alive no matter what
+            # except Exception as loop_error:
+            #     print(f"⚠️ Internal engine hiccup: {loop_error}. Auto-recovering stack...")
+            #     time.sleep(2)
+            #     continue  # Keeps the loop alive no matter what
+            except Exception as e:
+                consecutive_errors += 1
+                print(f"⚠️ Internal engine hiccup: Failed to read from device. ({consecutive_errors}/{MAX_CONSECUTIVE_ERRORS})")
+                
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    print("🔄 USB/PipeWire stream disconnected. Auto-recovering PvRecorder stack...")
+                    
+                    # 1. Safely tear down stale C object
+                    try:
+                        recorder.stop()
+                        recorder.delete()
+                    except Exception:
+                        pass
+
+                    # 2. Pause to allow USB bus & PipeWire to finish re-enumeration
+                    time.sleep(2)
+
+                    # 3. Re-create a fresh recorder instance
+                    try:
+                        recorder = util.create_pvrecorder(frame_length=1280)
+                        recorder.start()
+                        consecutive_errors = 0
+                        print("✅ PvRecorder stack successfully recovered!")
+                    except Exception as rec_err:
+                        print(f"❌ Re-initialization failed: {rec_err}. Retrying in 3s...")
+                        time.sleep(3)
+
+            time.sleep(0.01)
     except KeyboardInterrupt:
         print("\nExiting...")
     finally:
