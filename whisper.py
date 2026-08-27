@@ -59,7 +59,9 @@ commands = {
     "zapni zvuk": ("lg", "mute off"),
     "vypni zvuk": ("lg", "mute on"),
     "hlasitěji": ("lg", "+"),
+    "zesil televizi.": ("lg", "+"),
     "potišeji": ("lg", "-"),
+    "ztlum televizi.": ("lg", "-"),
     "přepni na jedničku": ("lg", "1"),
     "přepni na trojku": ("lg", "3"),
     "přepni nahoru": ("lg", "up"),
@@ -233,7 +235,6 @@ def transcribe_google_cloud(audio_data_int16):
         if audio_data_int16 is None or len(audio_data_int16) == 0:
             print("⚠️ [Google Cloud STT]: Empty audio buffer received.")
             return None
-        
         # Convert numpy array into in-memory WAV file bytes
         byte_io = io.BytesIO()
         with wave.open(byte_io, "wb") as wf:
@@ -242,17 +243,14 @@ def transcribe_google_cloud(audio_data_int16):
             wf.setframerate(16000)
             wf.writeframes(audio_data_int16.tobytes())
         wav_bytes = byte_io.getvalue()
-
-        # Initialize Google Speech Client
         client = speech.SpeechClient()
         audio = speech.RecognitionAudio(content=wav_bytes)
-        
-        # FIXED: Removed model="latest_short" (not supported for cs-CZ in v1 API)
+           
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=16000,
             language_code="cs-CZ",
-            enable_automatic_punctuation=True
+            enable_automatic_punctuation=False,    # Disabled for faster short-clip parsing
         )
         # Call Google API with 3.0s timeout
         response = client.recognize(config=config, audio=audio, timeout=3.0)
@@ -272,6 +270,36 @@ def transcribe_google_cloud(audio_data_int16):
         traceback.print_exc()
     return None
 
+
+# Verifies candidate wake-word audio using local Faster-Whisper.
+def verify_alexa_local(audio_buffer_int16) -> bool:
+    try:
+        audio_data_float32 = audio_buffer_int16.astype(np.float32) / 32768.0
+        segments, _ = whisper_model.transcribe(
+            audio_data_float32,
+            language="cs",
+            beam_size=1,
+            best_of=1,
+            temperature=0,
+            vad_filter=False,  # Keep full audio snippet intact
+            initial_prompt="Alexa, Aleksa, Aleks, Alec"  # Bias local Whisper toward phonetic variants
+        )
+        transcript = "".join([s.text for s in segments]).strip()
+        if not transcript:
+            # print("🔍 [Local Verification]: Empty transcript (rejected)")
+            return False
+        clean_text = unidecode(transcript.lower()).strip()
+        valid_roots = ["alex", "aleks", "alecs", "alek", "alec", "olex", "oleks", "lexa", "leksa", "lexi"]
+        words = clean_text.split()
+        root_matched = any(any(root in word for root in valid_roots) for word in words)
+        fuzzy_score = max(fuzz.partial_ratio("alexa", clean_text), fuzz.partial_ratio("aleksa", clean_text))
+        is_confirmed = root_matched or (fuzzy_score >= 60)
+        # print(f"🔍 [Local Verification]: '{transcript}' (Clean: '{clean_text}') -> Confirmed: {is_confirmed}")
+        return is_confirmed
+    except Exception as err:
+        # print(f"⚠️ Local Verification error: {err}")
+        return False
+
 def whisper(use_cloud: bool | None = None):
     if not is_voice_control_allowed():
         return
@@ -283,7 +311,7 @@ def whisper(use_cloud: bool | None = None):
         recorder.start()
 
         # audio_file = record_command(recorder, duration=3)
-        audio_data_int16 = record_command(recorder, duration=3.5)               # new ✅ Passed directly as a RAM object
+        audio_data_int16 = record_command(recorder, duration=3.7)               # new ✅ Passed directly as a RAM object
         recorder.stop()  # Stop recording so CPU can focus on transcribing
         beep_end()
         print("Transcribing...")

@@ -8,7 +8,9 @@ from dotenv import load_dotenv
 from gtts import gTTS
 from pvrecorder import PvRecorder
 
-required_vars = ["WIIM_IP", "TV_IP", "TV_MAC", "LOX_IP", "LOX_UDP_PORT", "LOX_USER", "LOX_PASS", "IP_BINDING", "SERVER_UDP_PORT", "BEEP_START", "BEEP_END"]
+required_vars = ["WIIM_IP", "TV_IP", "TV_MAC", "LOX_IP", "LOX_UDP_PORT", "LOX_USER", "LOX_PASS", "IP_BINDING",
+                 "SERVER_UDP_PORT", "BEEP_DETECTED", "BEEP_START", "BEEP_END", "SINK_VOL", "MIC_VOL",
+                 "THRESHOLD_LOW", "THRESHOLD_HIGH"]
 ALEXA_MUTED = False
 
 def check_udp_port_available() -> bool:
@@ -254,7 +256,10 @@ def beep_end():
     cfg = get_config()
     subprocess.Popen(["pw-play", "-p", cfg["BEEP_END"]])
 
-
+def beep_detected():  
+    cfg = get_config()
+    subprocess.Popen(["pw-play", "-p", cfg["BEEP_DETECTED"]])
+    
 def tea_timer(min, txt):
     print(f"⏱️ Tea timer started in background for {min} minutes...")
     time.sleep(min * 60)

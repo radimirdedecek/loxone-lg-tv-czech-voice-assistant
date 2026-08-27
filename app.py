@@ -6,8 +6,7 @@ import warnings
 import threading
 from openwakeword.model import Model
 from pathlib import Path
-from whisper import whisper, speak_and_wait, transcribe_google_cloud
-from unidecode import unidecode
+from whisper import whisper, speak_and_wait, verify_alexa_local
 from collections import deque
 import util
 
@@ -29,14 +28,9 @@ MODEL_DIR = BASE_DIR / "oww_models"
 MODEL_DIR.mkdir(exist_ok=True)
 MODEL_PATH = str(MODEL_DIR / "alexa.onnx")
 MAX_CONSECUTIVE_ERRORS = 5
-# Tune these two variables in your main loop
-THRESHOLD = 0.82                                # changed from 0.85 -> 0.82
-REQUIRED_CONSECUTIVE_FRAMES = 2                 # Must match 'alexa' across ~240ms of contiguous audio
-                                                # changed from 2 -> 3
-# 1 Frame (>= 1): Too sensitive. A quick burst of TV noise or a cough might produce a single random spike to 0.87 for 80 ms, triggering a false wake-up.
-# 2 Frames(>= 2): Ideal. Verifies that the activation peak is real and sustained across adjacent audio chunks while you finish saying the word.
-# 5 Frames(>= 5): Too strict. Real speech peaks fade too fast to sustain 5 consecutive
-NET_CHECK_INTERVAL = 15  # Re-check internet every 15 seconds
+THRESHOLD_LOW = float(os.getenv("THRESHOLD_LOW", "0.62")) 
+THRESHOLD_HIGH = float(os.getenv("THRESHOLD_HIGH", "0.95"))
+NET_CHECK_INTERVAL = 45  # Re-check internet every 45 seconds
 util.setup_audio_output()
 
 def download_alexa_model():
@@ -51,18 +45,6 @@ def download_alexa_model():
         except Exception as e:
             print(f"Download failed: {e}")
 
-# Sends last 1.5s of audio to Google STT to confirm 'Alexa' was spoken.
-def verify_alexa_cloud(audio_buffer_int16) -> bool:
-    transcript = transcribe_google_cloud(audio_buffer_int16)
-    print(transcript)
-    if not transcript:
-        return False  # Offline or empty response
-    clean_text = unidecode(transcript.lower())
-    # Czech STT often writes "Alexa" phonetically: "aleksa", "aleksi", "alekso", "aleksandra"
-    matches = ["alexa", "aleksa", "aleks", "alekso", "aleksi"]
-    is_confirmed = any(m in clean_text for m in matches)
-    print(f"🔍 [Stage 2 Cloud Verification]: '{transcript}' -> Confirmed: {is_confirmed}")
-    return is_confirmed
 
 def get_time():
     return f"{time.strftime('%d.%m.%Y %H:%M:%S')}"
@@ -93,7 +75,7 @@ def main():
     last_net_check = 0
     consecutive_errors = 0
     consecutive_matches = 0 
-    audio_ring_buffer = deque(maxlen=20) # Rolling ring buffer to hold the last ~1.6s of audio (20 x 80ms chunks)
+    audio_ring_buffer = deque(maxlen=24) # Rolling ring buffer to hold the last ~1.9s of audio (24 x 80ms chunks)
     try:
         while True:
             now = time.time()
@@ -103,60 +85,58 @@ def main():
                 last_net_check = now
                 # Log status shifts
                 if was_online != USE_CLOUD_VERIFY:
-                    status_str = "🌐 ONLINE (Cloud Verify Active)" if USE_CLOUD_VERIFY else "🔌 OFFLINE (Strict Local Mode Active)"
+                    status_str = "🌐 ONLINE (Google Cloud STT/TTS Active)" if USE_CLOUD_VERIFY else "🔌 OFFLINE (Strict Local Mode Active)"
                     print(f"📡 Network status changed: {status_str}")
             # Dynamic sensitivity based on internet availability
-            REQUIRED_CONSECUTIVE_FRAMES = 2 if USE_CLOUD_VERIFY else 3
-            
+            # Must match 'alexa' across ~240ms of contiguous audio
+            # 1 Frame (>= 1): Too sensitive. A quick burst of TV noise or a cough might produce a single random spike to 0.87 for 80 ms, triggering a false wake-up.
+            # 2 Frames(>= 2): Ideal. Verifies that the activation peak is real and sustained across adjacent audio chunks while you finish saying the word.
+            # 5 Frames(>= 5): Too strict. Real speech peaks fade too fast to sustain 5 consecutive
+            REQUIRED_CONSECUTIVE_FRAMES = 2 
             try:
                 pcm = recorder.read()
-                # Reset error counter on successful read
                 if pcm:
                     consecutive_errors = 0
-                    # NEW:
                     chunk_np = np.array(pcm, dtype=np.int16)
                     audio_ring_buffer.append(chunk_np)
-                if util.ALEXA_MUTED:
-                    time.sleep(0.5)
-                    continue  # Skip processing entirely if Loxone turned us off!
-                # input_data = np.array(pcm, dtype=np.int16)  OLD
-                # prediction = model.predict(input_data)      OLD
-                prediction = model.predict(chunk_np)        # NEW
-                prob = prediction["alexa"]
-                if prob >= THRESHOLD:               # changed from 0.85 -> 0.82
+                    if util.ALEXA_MUTED:
+                        time.sleep(0.5)
+                        continue  # Skip processing entirely if Loxone turned us off!
+                    prediction = model.predict(chunk_np)  # Predict directly on the freshly read chunk
+                    prob = prediction["alexa"]
+                else:
+                    continue
+                if prob >= THRESHOLD_LOW:               # changed from 0.85 -> 0.82
                     consecutive_matches += 1        # new adjusting sensitivity
                 else:                               # Instead of consecutive_matches = 0, decay slowly!                           
                     consecutive_matches = max(0, consecutive_matches - 1)     # new decay
                 if consecutive_matches >= REQUIRED_CONSECUTIVE_FRAMES:        # new adjusting sensitivity
-                    
-                    # NEW: start ######################################################################
-                    # STAGE 2: Cloud Verification (When enabled)
-                    should_trigger = True
-                    if USE_CLOUD_VERIFY and len(audio_ring_buffer) > 0:
-                        print(f"DETECTED: ALEXA - Cloud Verification ({prob:.2f}) ...")
-                        # V1_old: Flatten rolling buffer into a single int16 numpy array
-                        recent_audio = np.array(list(audio_ring_buffer), dtype=np.int16).flatten()
-                        # V2_new: Convert deque of (20 x 1280) chunks into a flat 1D array of 25,600 PCM samples
-                        # recent_audio = np.concatenate(list(audio_ring_buffer)).astype(np.int16)
-                        should_trigger = verify_alexa_cloud(recent_audio)
-                    if should_trigger:
-                        if USE_CLOUD_VERIFY : 
-                            print("DETECTED: ALEXA - ✅ ALEXA VERIFIED by Cloud! Launching Whisper...")
+                    util.beep_detected()  # xxx FOR: wake word sensitivity testing xxx
+                    consecutive_matches = 0
+                    should_trigger = False
+                    if prob >= THRESHOLD_HIGH:
+                        print(f"DETECTED: ALEXA - High confidence, Bypassing Local Verification ({prob:.2f} >= {THRESHOLD_HIGH}) ...")
+                        should_trigger = True
+                    else:
+                        if len(audio_ring_buffer) > 0:
+                            print(f"DETECTED: ALEXA - Running Local Verification ({prob:.2f}) ...")
+                            recent_audio = np.concatenate(list(audio_ring_buffer))
+                            should_trigger = verify_alexa_local(recent_audio)
+                            if should_trigger: print(f"DETECTED: ALEXA - ✅ Verified! Launching Whisper...")
                         else:
-                            print(f"DETECTED: ALEXA ({prob:.2f})")
-                        consecutive_matches = 0
+                            should_trigger = False
+                        
+                    if should_trigger:
                         audio_ring_buffer.clear()
                         whisper(USE_CLOUD_VERIFY)
-                        
-                        # Reset model state
+                        # Reset openWakeWord model state
                         model = Model(wakeword_model_paths=[MODEL_PATH])
                         print(".\n\033[1;37m" + "=" * 65)
                         print(f">>> System Re-initialized: \033[1;33m{get_time()} \033[1;37mALEXA is Ready <<<")
                         print("=" * 65 + "\033[0m")
                     else:
-                        print("DETECTED: ALEXA - ❌ ALEXA Rejected by Cloud! Resuming listener...")
-                        consecutive_matches = 0  # Reset and ignore trigger
-                    # NEW: end ######################################################################
+                        print("DETECTED: ALEXA - ❌ ALEXA Rejected by Local Verification! Resuming listener...")
+                        audio_ring_buffer.clear()
                     
                     # OLD:
                     # print(f"DETECTED: ALEXA ({prob:.2f})")
