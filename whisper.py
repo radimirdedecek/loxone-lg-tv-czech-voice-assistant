@@ -275,29 +275,33 @@ def transcribe_google_cloud(audio_data_int16):
 def verify_alexa_local(audio_buffer_int16) -> bool:
     try:
         audio_data_float32 = audio_buffer_int16.astype(np.float32) / 32768.0
+        print(f"🔍 [Local Verification Input]: {audio_data_float32}")
         segments, _ = whisper_model.transcribe(
             audio_data_float32,
             language="cs",
             beam_size=1,
             best_of=1,
             temperature=0,
-            vad_filter=False,  # Keep full audio snippet intact
+            vad_filter=True,  # True: so pure silence/background noise isn't hallucinated as text! 
+                              # False: Keep full audio snippet intact
             initial_prompt="Alexa, Aleksa, Aleks, Alec"  # Bias local Whisper toward phonetic variants
         )
         transcript = "".join([s.text for s in segments]).strip()
         if not transcript:
-            # print("🔍 [Local Verification]: Empty transcript (rejected)")
+            print("🔍 [Local Stage Verification]: Empty transcript / Silence (rejected)")
             return False
         clean_text = unidecode(transcript.lower()).strip()
         valid_roots = ["alex", "aleks", "alecs", "alek", "alec", "olex", "oleks", "lexa", "leksa", "lexi"]
         words = clean_text.split()
         root_matched = any(any(root in word for root in valid_roots) for word in words)
-        fuzzy_score = max(fuzz.partial_ratio("alexa", clean_text), fuzz.partial_ratio("aleksa", clean_text))
-        is_confirmed = root_matched or (fuzzy_score >= 60)
-        # print(f"🔍 [Local Verification]: '{transcript}' (Clean: '{clean_text}') -> Confirmed: {is_confirmed}")
+        # fuzzy_score = max(fuzz.partial_ratio("alexa", clean_text), fuzz.partial_ratio("aleksa", clean_text))
+        # Use fuzz.ratio (full string comparison) instead of partial_ratio to prevent matching on tiny noise fragments
+        fuzzy_score = max(fuzz.ratio("alexa", clean_text), fuzz.ratio("aleksa", clean_text))
+        is_confirmed = root_matched or (fuzzy_score >= 65)
+        print(f"🔍 [Local Stage Verification]: Spoken: '{transcript}' | Clean: '{clean_text}' | Roots Matched: {root_matched} | Fuzzy: {fuzzy_score}% -> Confirmed: {is_confirmed}")
         return is_confirmed
     except Exception as err:
-        # print(f"⚠️ Local Verification error: {err}")
+        print(f"⚠️ Local Verification error: {err}")
         return False
 
 def whisper(use_cloud: bool | None = None):

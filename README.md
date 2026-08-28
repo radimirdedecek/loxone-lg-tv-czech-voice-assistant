@@ -25,6 +25,9 @@ The Python backend engine manages active system configuration loops, outputs col
 * **Any Voice Command for Function:** Map customized natural language voice commands to any hardware target.
 * **More Voice Commands for same Function:** Bind multiple voice phrases to trigger the exact same action.
 * **Fully Offline:** Core command processing and wake-word detection operate completely locally and offline.
+* **Two-Stage Local Wake-Word Verification:** Combines lightweight ONNX candidate detection with localized `Faster-Whisper` verification in RAM for zero false positives and sub-100ms response times without cloud latency.
+* **Smart Hybrid Command STT:** Uses high-accuracy Google Cloud Speech-to-Text for multi-word voice commands when online, automatically failing over to local `Faster-Whisper` if internet connectivity drops.
+* **Single-Instance Port Guard:** Built-in UDP socket availability verification prevents port binding conflicts, eg. when testing Code while `alexa.service` runs in the background.
 * **Jablotron Security Integration:** Monitors house arming states over an RS485 serial bus via Loxone to know precisely when the home is armed or empty.
 * **Intelligent Power Management:** Wake the workstation up (Wake-on-LAN) or trigger a system sleep to conserve energy when the house is armed or empty.
 * **Remote Microphone Enable/Disable from Loxone APP:** Toggle microphone recording states (Mute/Unmute) on the fly directly inside the Loxone App.
@@ -34,11 +37,12 @@ The Python backend engine manages active system configuration loops, outputs col
 
 ## 🛠️ System Architecture
 
-The assistant leverages a pipeline that maximizes local hardware configurations while preventing execution lockups across real-time device operations:
+The assistant leverages a 3-stage pipeline optimized for noisy living environments (TV background, music, ambient chatter):
 
-* **Wake Word Detection (`openWakeWord`):** Monitors audio streams with low CPU consumption using a specialized ONNX runtime engine.
-* **Edge Transcription Core (`faster-whisper`):** A pre-warmed Czech language model configured in INT8 execution mode directly inside workstation RAM for instantaneous voice-to-text inference.
-* **Asynchronous Command Handlers:** Background threads isolate long-running asynchronous routines (like blind travel checking and network timeouts) from the core listening thread.
+1. **Stage 1: Candidate Capture (`openWakeWord`):** Continuously scans audio chunks using an ONNX runtime model. Runs at low CPU usage with dynamic candidate thresholding (`THRESHOLD_LOW=0.62` for candidate capture, `THRESHOLD_HIGH=0.95` for Fast-Path execution).
+2. **Stage 2: Local Verification (`verify_alexa_local`):** Low-confidence candidate buffers (~1.9s captured via rolling RAM `deque`) are instantly verified by an in-memory `Faster-Whisper` model equipped with phonetic context hints (`Alexa`, `Aleksa`, `Aleks`, etc.) and Voice Activity Detection (`vad_filter=True`).
+3. **Stage 3: Command Processing (`Whisper` / `Google STT`):** Once verified, command audio is recorded and routed to Google Cloud STT (if online) or local `Faster-Whisper` (if offline). Intents are mapped using fuzzy string-collapsing logic (`thefuzz`).
+
 * **Loxone Block Names:** must be a single continuous string—using dots (.), underscores (_), or camelCase `!!!`
 
 ---
@@ -47,27 +51,29 @@ The assistant leverages a pipeline that maximizes local hardware configurations 
 
   ```text
   .
-  ├── .env.example          # Template configuration containing credential mapping tokens
-  ├── app.py                # Application entryway & primary 24/7 wake word tracking loop
-  ├── lg_tv.py              # LG webOS TV API control interface with Wake-on-LAN recovery
-  ├── LICENSE               # Github license
-  ├── loxone.py             # Miniserver HTTP/XML communication layer & blind tracking loops
   ├── messages/             # System response feedback confirmation audio files
   ├── oww_models/           # Cached ONNX runtime localized wake word target binaries
+  ├── .env.example          # Template configuration containing credential mapping tokens
+  ├── LICENSE               # Github license
   ├── README.md             # Github readme
+  ├── app.py                # Application entryway & primary 24/7 wake word tracking loop
+  ├── lg_tv.py              # LG webOS TV API control interface with Wake-on-LAN recovery
+  ├── loxone.py             # Miniserver HTTP/XML communication layer & blind tracking loops
   ├── requirements.txt      # Python requirements
   ├── tv_token.json_example # Template configuration containing credential mapping tokens
   ├── util.py               # System audio playback wrapper (`pw-play`) & environment config guards
-  └── whisper.py            # Whisper model lifecycle, intent-matching & string-distance logic
+  ├── whisper.py            # Whisper model lifecycle, intent-matching & string-distance logic
+  └── wiim_amp.py           # WIIM AMP API control interface with Wake-on-LAN recovery
   ```
 
 ## 🚀 Installation & Prerequisites
 ### Hardware Requirements
-  - **Computing Host:** Linux Environment running on standard x86 hardware (`Tested on x86-64 Workstation running Ubuntu 26.04 LTS`)
+  - **Computing Host:** Linux Environment running on standard x86 hardware (`Tested on x86-64 Workstation running Ubuntu 26.04 LTS and on DELL XPS 13 with Debian 13`)
   - **Audio Capture:** Intelligent USB far-field microphone arrays equipped with hardware Acoustic Echo Cancellation (AEC) and Automatic Gain Control (AGC). This ensures clear voice trigger pickup even while music or televisions are playing nearby. (`Tested on Jabra Speak 510 model PHS002W`)
   - **Loxone Miniserver** (`Tested on Loxone Miniserver V2, Firmware 17.0.3.31`)  
 ### Optional Hardware Integrations
   - **LG Smart TV** running webOS.
+  - **WIIM AMP** Smart Streaming Amplifier for Passive Speakers.
   - **Jablotron Intrusion Alarm System** equipped with a **JA-121T** RS485 communication module.
   - **Loxone RS485 Extension** Hardware Communication Bus to parse inbound serial data frames from the Jablotron panel.
 
@@ -262,13 +268,50 @@ Run these steps via your remote connection to set up the clean, isolated Python 
     ```
     Configure your local network topology keys appropriately:
     ```bash
-    TV_IP=your_TV_IP_address
-    TV_MAC=your_TV_MAC_address
-    LOX_IP=your_miniserver_IP_address
-    LOX_USER=your_miniserver_username
-    LOX_PASS=your_miniserver_password
+    # wiim_amp_player_ip_address
+    WIIM_IP=wiim_amp_player_ip_address
+    # lg_tv_ip_address
+    TV_IP=lg_tv_ip_address
+    # lg_tv_mac_address
+    TV_MAC=lg_tv_mac_address
+    # loxone_miniserver_ip_address
+    LOX_IP=loxone_miniserver_ip_address
+    # loxone_miniserver_UDP_PORT
+    LOX_UDP_PORT=5005
+    # loxone_miniserver_user
+    LOX_USER=loxone_miniserver_user
+    # loxone_miniserver_password
+    LOX_PASS=loxone_miniserver_password
+    # UDP server network binding
+    # Use 0.0.0.0 to accept commands from any network interface (LAN / Wi-Fi)
+    # Use 127.0.0.1 to restrict incoming UDP packets strictly to local loopback
+    IP_BINDING=0.0.0.0
+    # linux_server_UDP_PORT
+    SERVER_UDP_PORT=5006
+    # audio marking - wake word detected
+    BEEP_DETECTED=/usr/share/sounds/freedesktop/stereo/dialog-warning.oga
+    # audio marking - beginning of cmd recording
     BEEP_START=/usr/share/sounds/sound-icons/percussion-10.wav
+    # audio marking - end of cmd recording
     BEEP_END=/usr/share/sounds/sound-icons/cembalo-11.wav
+    # default speaker volume on app start
+    SINK_VOL=0.63   # PipeWire SINK volume, 100*0.63**3=25 (25% signal power)
+    # default mic. volume on app start
+    MIC_VOL=1.0     # PipeWire MIC volume,                (100% signal power)
+    #
+    # PipeWire SINK volume to PCT signal power = 100*volume**3
+    # volume = 0.63   >  25% signal power
+    # volume = 0.794  >  50% signal power
+    # volume = 0.909  >  75% signal power
+    # volume = 1.0    > 100% signal power
+    #
+    # wake word detection sensitivity, 0.95 is very strict
+    #                                  0.85 strict for offline
+    #                                  0.82 good results for offline
+    #                                  0.72 for offline + online check
+    #                                  0.68 for offline + online  
+    THRESHOLD_LOW=0.62   # Sensitivity for Local Verification check
+    THRESHOLD_HIGH=0.95  # Skip Local Verification check if openWakeWord confidence is extremely high
     ```
 
 ### 3. 📂 How to Prepare the Folder on local PC for Data Exchange
@@ -346,6 +389,8 @@ Edit `whisper.py` and update the list of commands according to your needs `comma
 ## 📦 Defensive Execution & Error Recovery
 
 This assistant is engineered to withstand real-time infrastructure challenges without dropping out or crashing:
+
+  -  ***Single-Instance Guard:*** Checks socket port binding (SERVER_UDP_PORT) before loading heavy models, exiting cleanly with an informative message if alexa.service is already active.
 
   -  ***Microphone Integrity Guard:*** Core streaming scopes wrap within execution safety barriers. If network pipelines break, audio frame reading variables drop securely via finally routines to ensure inputs do not become unresponsive or deadlocked.
 
