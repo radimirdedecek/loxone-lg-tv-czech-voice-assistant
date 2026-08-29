@@ -177,6 +177,8 @@ def process_smart_home_intent(raw_text):
     print(f"Processing Raw Text ...")
     print(f"          raw_text: {raw_text}")
     print(f"collapsed raw_text: {collapsed_spoken}")
+    if len(collapsed_spoken) < 5:
+        return ["❌ Speech too short", None]
     best_match = None
     highest_score = 0
     for target_phrase, command_tuple in commands.items():
@@ -198,7 +200,7 @@ def process_smart_home_intent(raw_text):
             highest_score = score
             best_match = (target_phrase, command_tuple, collapsed_target)
 
-    if highest_score > 70:
+    if highest_score > 78:
         phrase, command_tuple, collapsed_target = best_match
         print(f"  collapsed target: {collapsed_target}")
         print(f"MATCH FOUND ({highest_score:3}%): {phrase} -> {command_tuple}")
@@ -275,29 +277,31 @@ def transcribe_google_cloud(audio_data_int16):
 def verify_alexa_local(audio_buffer_int16) -> bool:
     try:
         audio_data_float32 = audio_buffer_int16.astype(np.float32) / 32768.0
-        print(f"🔍 [Local Verification Input]: {audio_data_float32}")
+        # print(f"🔍 [Local Verification Input]: {audio_data_float32}")
         segments, _ = whisper_model.transcribe(
-            audio_data_float32,
-            language="cs",
-            beam_size=1,
-            best_of=1,
-            temperature=0,
-            vad_filter=True,  # True: so pure silence/background noise isn't hallucinated as text! 
-                              # False: Keep full audio snippet intact
-            initial_prompt="Alexa, Aleksa, Aleks, Alec"  # Bias local Whisper toward phonetic variants
-        )
+                    audio_data_float32,
+                    language="cs",
+                    beam_size=1,
+                    best_of=1,
+                    temperature=0,
+                    rep_penalty=1.2, # 1. Stop Whisper from repeating words infinitely
+                    vad_filter=True,  # 2. Ignore pure silence/TV noise
+                    initial_prompt="Alexa" # 3. Keep initial prompt minimal
+                )
         transcript = "".join([s.text for s in segments]).strip()
         if not transcript:
             print("🔍 [Local Stage Verification]: Empty transcript / Silence (rejected)")
             return False
         clean_text = unidecode(transcript.lower()).strip()
-        valid_roots = ["alex", "aleks", "alecs", "alek", "alec", "olex", "oleks", "lexa", "leksa", "lexi"]
         words = clean_text.split()
-        root_matched = any(any(root in word for root in valid_roots) for word in words)
-        # fuzzy_score = max(fuzz.partial_ratio("alexa", clean_text), fuzz.partial_ratio("aleksa", clean_text))
-        # Use fuzz.ratio (full string comparison) instead of partial_ratio to prevent matching on tiny noise fragments
+        if len(words) > 5:
+            print(f"🔍 [Local Stage Verification]: Hallucination detected ({len(words)} words) -> Rejected")
+            return False
+        # valid_roots = ["alex", "aleks", "alecs", "alek", "alec", "olex", "oleks", "lexa", "leksa", "lexi"]
+        valid_roots = ["alexa", "aleksa", "aleks", "alecs", "alec"]
+        root_matched = any(w in valid_roots for w in words)
         fuzzy_score = max(fuzz.ratio("alexa", clean_text), fuzz.ratio("aleksa", clean_text))
-        is_confirmed = root_matched or (fuzzy_score >= 65)
+        is_confirmed = root_matched or (fuzzy_score >= 68)
         print(f"🔍 [Local Stage Verification]: Spoken: '{transcript}' | Clean: '{clean_text}' | Roots Matched: {root_matched} | Fuzzy: {fuzzy_score}% -> Confirmed: {is_confirmed}")
         return is_confirmed
     except Exception as err:

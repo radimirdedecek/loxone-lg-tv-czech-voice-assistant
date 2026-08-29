@@ -16,6 +16,7 @@ alexacp.sh
 *.secret
 tv_token.json
 serviceAccountKey.json
+SEZNAM_PRIKAZU.md
 
 # IDEs
 .vscode/
